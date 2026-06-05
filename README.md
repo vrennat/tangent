@@ -17,11 +17,11 @@ so there's nothing to download and the feed stays current.
 ## Develop
 
 ```bash
-bun install   # or npm install
-npm run dev    # http://localhost:5173
+bun install
+bun run dev    # http://localhost:5173
 ```
 
-Other scripts: `npm run check` (svelte-check), `npm run test` (vitest), `npm run build`.
+Other scripts: `bun run check` (svelte-check), `bun run test` (vitest), `bun run build`.
 
 ## How it works
 
