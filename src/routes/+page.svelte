@@ -113,7 +113,7 @@
 				<a
 					href="/start"
 					class="rounded-full border border-hair px-4 py-2 text-sm font-medium text-muted
-						transition-colors hover:border-accent/50 hover:text-accent">Start a new one</a
+						transition-colors hover:border-accent/50 hover:text-accent">Start a new wormhole</a
 				>
 			</div>
 		{:else}
