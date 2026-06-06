@@ -86,16 +86,25 @@ async function fetchLeadLinkTitles(title: string): Promise<string[]> {
 
 	const seen = new Set<string>();
 	const ordered: string[] = [];
-	const anchor = /<a\b[^>]*?\shref="([^"]+)"/g;
-	let match: RegExpExecArray | null;
-	while ((match = anchor.exec(html)) !== null) {
-		const linked = wormholeTitleFromHref(match[1]);
-		if (!linked || linked === title || /\(disambiguation\)$/i.test(linked)) continue;
-		if (!seen.has(linked)) {
-			seen.add(linked);
-			ordered.push(linked);
+	const collect = (fragment: string) => {
+		const anchor = /<a\b[^>]*?\shref="([^"]+)"/g;
+		let match: RegExpExecArray | null;
+		while ((match = anchor.exec(fragment)) !== null) {
+			const linked = wormholeTitleFromHref(match[1]);
+			if (!linked || linked === title || /\(disambiguation\)$/i.test(linked)) continue;
+			if (!seen.has(linked)) {
+				seen.add(linked);
+				ordered.push(linked);
+			}
 		}
-	}
+	};
+
+	// Prose paragraphs first, then everything else (infobox/taxobox, lists). This ranks
+	// an article's narrative links above its infobox links — e.g. Octopus leads with
+	// Mollusc/Cephalopod/Squid, not the taxobox's geological periods.
+	const prose = (html.match(/<p\b[\s\S]*?<\/p>/gi) ?? []).join('\n');
+	collect(prose);
+	collect(html);
 	return ordered;
 }
 
