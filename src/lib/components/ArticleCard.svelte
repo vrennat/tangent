@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import type { FeedCard } from '$lib/feed/types';
 	import { profile } from '$lib/engagement/profile.svelte';
+	import { wormholeTitleFromHref } from '$lib/wikipedia/links';
 	import ConnectionBreadcrumb from './ConnectionBreadcrumb.svelte';
 
 	let {
@@ -56,13 +58,44 @@
 		}
 	}
 
-	// Make links inside the rendered article open on Wikipedia in a new tab.
+	// Rewire links inside the rendered article:
+	//  - article links  -> open a new wormhole from that topic (client-side nav)
+	//  - everything else -> open on Wikipedia in a new tab
+	//  - in-page #anchors -> left alone (scroll to footnotes/sections within the card)
 	$effect(() => {
 		if (!contentEl || !articleHtml) return;
+
 		for (const a of contentEl.querySelectorAll('a')) {
-			a.setAttribute('target', '_blank');
-			a.setAttribute('rel', 'noopener noreferrer');
+			const href = a.getAttribute('href') ?? '';
+			if (href.startsWith('#')) continue;
+
+			const title = wormholeTitleFromHref(href);
+			if (title) {
+				// Real URL so middle/cmd-click opens the new wormhole in a new tab too.
+				a.setAttribute('href', `/?seed=${encodeURIComponent(title)}`);
+				a.dataset.seed = title;
+				a.classList.add('wh-dive');
+				a.removeAttribute('target');
+			} else {
+				a.setAttribute('target', '_blank');
+				a.setAttribute('rel', 'noopener noreferrer');
+				a.classList.add('wh-external');
+			}
 		}
+
+		// Plain left-clicks on article links navigate in-app (smooth); modified clicks
+		// fall through to the rewritten href (new tab) via the default behavior.
+		const onClick = (event: MouseEvent) => {
+			if (event.defaultPrevented || event.button !== 0) return;
+			if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+			const anchor = (event.target as HTMLElement | null)?.closest?.('a');
+			const seed = anchor?.dataset.seed;
+			if (!seed) return;
+			event.preventDefault();
+			goto(`/?seed=${encodeURIComponent(seed)}`);
+		};
+		contentEl.addEventListener('click', onClick);
+		return () => contentEl?.removeEventListener('click', onClick);
 	});
 
 	// Dwell tracking: accumulate time this card is at least half on screen.

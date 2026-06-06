@@ -120,6 +120,24 @@ body {
 .wiki-content a:hover {
 	text-decoration: underline;
 }
+/* Article links dive into a new wormhole; external links leave to the web. */
+.wiki-content a.wh-dive {
+	cursor: pointer;
+	text-decoration-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+	text-decoration-line: underline;
+	text-decoration-thickness: 1px;
+	text-underline-offset: 2px;
+}
+.wiki-content a.wh-external {
+	color: var(--color-faint);
+}
+.wiki-content a.wh-external::after {
+	content: '↗';
+	font-size: 0.7em;
+	vertical-align: super;
+	margin-left: 1px;
+	opacity: 0.7;
+}
 .wiki-content h2,
 .wiki-content h3,
 .wiki-content h4 {
