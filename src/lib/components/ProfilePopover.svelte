@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { profile } from '$lib/engagement/profile.svelte';
+	import { dfWeight } from '$lib/feed/score';
 
 	let { onClose }: { onClose: () => void } = $props();
 
@@ -8,7 +9,7 @@
 		Object.entries(profile.tokenWeights)
 			.map(([token, weight]) => {
 				const df = profile.tokenDocFreq[token] ?? 0;
-				const effective = weight / (1 + Math.log(1 + df));
+				const effective = dfWeight(weight, df);
 				return { token, effective };
 			})
 			.sort((a, b) => b.effective - a.effective)

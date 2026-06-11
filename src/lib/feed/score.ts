@@ -4,6 +4,11 @@ import { FEED } from './config';
 import { isPolitical } from './politics';
 import { tokenize } from './tokens';
 
+/** DF-discounted token weight — w / (1 + ln(1 + df)). Same form as TF-IDF's IDF. */
+export function dfWeight(weight: number, df: number): number {
+	return weight / (1 + Math.log(1 + df));
+}
+
 /**
  * Score a single candidate as the next step. Pure: same inputs -> same output.
  *
@@ -19,11 +24,9 @@ export function scoreCandidate(candidate: Candidate, ctx: EngineContext): number
 	let relevance = 0;
 	let overlap = 0;
 	for (const token of tokens) {
-		// DF-discount: common tokens (appearing in many seen articles) contribute less.
-		// w / (1 + ln(1 + df)) — same form as TF-IDF's IDF component.
 		const weight = ctx.tokenWeights[token] ?? 0;
 		const df = ctx.tokenDocFreq[token] ?? 0;
-		relevance += weight / (1 + Math.log(1 + df));
+		relevance += dfWeight(weight, df);
 		if (ctx.recentTokens.has(token)) overlap += 1;
 	}
 
