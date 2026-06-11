@@ -19,6 +19,7 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
 		// next request retries instead of serving a degraded card for a day. Shares
 		// the reader's article: key, so an imageless card prefetches the inline
 		// article for free.
+		let degraded = false;
 		if (article && !article.thumbnail) {
 			try {
 				const thumbnail = await cached(`leadimg:${article.title}`, TTL.long, async () => {
@@ -29,11 +30,15 @@ export const GET: RequestHandler = async ({ url, setHeaders }) => {
 				});
 				if (thumbnail) article = { ...article, thumbnail };
 			} catch {
-				// Best-effort: the card ships without an image rather than failing.
+				// Best-effort: the card ships without an image rather than failing. But
+				// only briefly cacheable — the Cloudflare edge caches these responses
+				// (cf-cache-status: HIT), and a long-lived degraded copy pins an
+				// imageless card on every client until it expires.
+				degraded = true;
 			}
 		}
 
-		setHeaders({ 'cache-control': 'public, max-age=3600' });
+		setHeaders({ 'cache-control': degraded ? 'public, max-age=60' : 'public, max-age=3600' });
 		return json({ article });
 	} catch {
 		return json({ article: null, error: 'upstream error' }, { status: 502 });
