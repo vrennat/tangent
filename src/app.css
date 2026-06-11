@@ -33,6 +33,11 @@ html {
 	-webkit-text-size-adjust: 100%;
 }
 
+@keyframes slide-from-right {
+	from { transform: translateX(100%); }
+	to   { transform: translateX(0); }
+}
+
 body {
 	font-family: var(--font-body);
 	/* Subtle deep-space gradient so the void isn't dead flat. */

@@ -94,6 +94,7 @@
 </script>
 
 <!-- Native dialog handles top-layer and Esc; oncancel fires on Esc before onclose. -->
+<!-- On desktop (lg+) the dialog becomes a right-side panel so the feed stays visible. -->
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
 <dialog
 	bind:this={dialogEl}
@@ -102,7 +103,10 @@
 		dismiss();
 	}}
 	class="fixed inset-0 z-50 m-0 flex h-full w-full max-h-none max-w-none flex-col
-		border-none bg-void p-0 text-ink backdrop:bg-black/60 backdrop:backdrop-blur-sm"
+		border-none bg-void p-0 text-ink backdrop:bg-black/60 backdrop:backdrop-blur-sm
+		lg:inset-y-0 lg:right-0 lg:left-auto lg:w-[min(48%,720px)] lg:rounded-l-2xl
+		lg:overflow-hidden lg:[box-shadow:-8px_0_40px_rgba(0,0,0,0.5)]
+		lg:animate-[slide-from-right_0.2s_ease-out]"
 >
 	<!-- Sticky header -->
 	<div

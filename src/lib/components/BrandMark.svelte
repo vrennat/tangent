@@ -5,18 +5,17 @@
 <span class="inline-flex items-center gap-2 font-display font-semibold tracking-tight">
 	<svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
 		<defs>
-			<radialGradient id="bm" cx="50%" cy="50%" r="50%">
-				<stop offset="0%" stop-color="#08080c" />
-				<stop offset="55%" stop-color="#6b5bd6" />
+			<linearGradient id="tg" x1="0%" y1="100%" x2="100%" y2="0%">
+				<stop offset="0%" stop-color="#6b5bd6" />
 				<stop offset="100%" stop-color="#4fd6e0" />
-			</radialGradient>
+			</linearGradient>
 		</defs>
-		<g fill="none" stroke="url(#bm)" stroke-width="2">
-			<ellipse cx="16" cy="16" rx="13" ry="13" opacity="0.3" />
-			<ellipse cx="16" cy="16" rx="9.5" ry="9.5" opacity="0.55" />
-			<ellipse cx="16" cy="16" rx="6" ry="6" opacity="0.85" />
-		</g>
-		<circle cx="16" cy="16" r="2.2" fill="#8b7bff" />
+		<!-- Circle: the path you were following -->
+		<circle cx="13" cy="21" r="8" fill="none" stroke="url(#tg)" stroke-width="2"/>
+		<!-- Tangent line: the moment you go off on one -->
+		<line x1="1" y1="20" x2="25" y2="1" stroke="url(#tg)" stroke-width="2" stroke-linecap="round"/>
+		<!-- Dot at the tangent point -->
+		<circle cx="7.3" cy="15.3" r="2.2" fill="url(#tg)"/>
 	</svg>
 	<span class="text-ink">tangent</span>
 </span>
