@@ -96,12 +96,11 @@
 			></div>
 		</div>
 	{:else}
+		<!-- No usable image anywhere in the article: a slim brand strip instead of a hollow hero. -->
 		<div
-			class="flex aspect-[16/6] w-full items-center justify-center
-				bg-gradient-to-br from-surface-2 to-surface text-2xl font-semibold text-faint"
-		>
-			{article.title.slice(0, 2)}
-		</div>
+			class="h-1.5 w-full bg-gradient-to-r from-accent/70 via-cyan/40 to-transparent"
+			aria-hidden="true"
+		></div>
 	{/if}
 
 	<div class="space-y-3 p-5 sm:p-6">
