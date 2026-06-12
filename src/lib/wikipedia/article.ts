@@ -55,6 +55,18 @@ export function sanitizeArticleHtml(raw: string): string {
 			(_m, set: string) => `srcset="${set.replace(/(^|,\s*)\/\//g, '$1https://')}"`
 		);
 
+	// Defer offscreen images so image-heavy articles don't fetch everything up front.
+	html = html.replace(/<img /gi, '<img loading="lazy" decoding="async" ');
+
+	// Demote section headings one level (h2→h3, h3→h4, h4→h5) so they nest under
+	// the reader's own <h2> article title rather than competing with it. Matches
+	// both open and close tags; ids/anchors are preserved. (.wiki-content restyles
+	// the shifted levels to keep the original visual hierarchy.)
+	html = html.replace(
+		/<(\/?)h([2-4])\b/gi,
+		(_m, slash: string, level: string) => `<${slash}h${Number(level) + 1}`
+	);
+
 	return html;
 }
 

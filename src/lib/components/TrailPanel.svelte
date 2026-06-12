@@ -44,7 +44,7 @@
 		if (e.target === dialogEl) dismiss();
 	}}
 	class="fixed inset-0 z-40 m-0 h-full w-full max-h-none max-w-none border-none
-		bg-transparent p-0 backdrop:bg-black/50 backdrop:backdrop-blur-sm"
+		bg-transparent p-0 backdrop:bg-black/60"
 >
 	<!-- Panel slides in from the right -->
 	<div
@@ -63,7 +63,8 @@
 				type="button"
 				onclick={dismiss}
 				aria-label="Close trail"
-				class="rounded-full p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+				class="icon-btn inline-flex items-center justify-center rounded-full p-1.5
+					text-muted transition-colors hover:bg-surface-2 hover:text-ink"
 			>
 				<svg
 					class="size-4"
@@ -93,7 +94,7 @@
 						{node.isDetour ? 'ml-4 border-l-2 border-dashed border-hair pl-3 opacity-60' : ''}"
 				>
 					<!-- Relation icon -->
-					<span class="mt-0.5 shrink-0 {node.relation === 'surprise' ? 'text-cyan' : node.relation === 'seed' ? 'text-accent' : node.relation === 'dive' ? 'text-accent' : 'text-muted'}">
+					<span class="mt-0.5 shrink-0 {node.relation === 'surprise' ? 'text-spark' : node.relation === 'seed' ? 'text-accent' : node.relation === 'dive' ? 'text-accent' : 'text-muted'}">
 						{#if node.relation === 'seed'}
 							<svg class="size-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 								<path d="M12 2l1.9 5.6L19.5 9l-5.6 1.9L12 16l-1.9-5.1L4.5 9l5.6-1.4L12 2z" />

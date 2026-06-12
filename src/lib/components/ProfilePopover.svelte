@@ -40,14 +40,23 @@
 			document.removeEventListener('pointerdown', onPointerdown);
 		};
 	});
+
+	// Move focus into the popover on open and return it to the trigger on close, so
+	// keyboard users aren't dropped back at the top of the document.
+	$effect(() => {
+		const trigger = document.activeElement as HTMLElement | null;
+		el?.focus();
+		return () => trigger?.focus?.();
+	});
 </script>
 
 <div
 	bind:this={el}
 	class="absolute right-0 top-full z-50 mt-2 w-full rounded-[var(--radius-card)] border border-hair
-		bg-surface shadow-[0_8px_40px_-12px_rgba(0,0,0,0.6)] sm:w-72"
+		bg-surface shadow-card sm:w-72 focus:outline-none"
 	role="dialog"
 	aria-label="Your interests"
+	tabindex="-1"
 >
 	<div class="p-4">
 		{#if hasWeights}

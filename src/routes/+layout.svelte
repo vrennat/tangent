@@ -17,29 +17,65 @@
 	const shellWidth = $derived(reader.isOpen ? 'max-w-2xl lg:max-w-7xl' : 'max-w-2xl');
 </script>
 
-<div
-	class="mx-auto flex min-h-dvh flex-col px-4 transition-[max-width] duration-200 ease-out {shellWidth}"
->
-	<header
-		class="sticky top-0 z-20 -mx-4 flex items-center justify-between border-b border-hair/60
-			bg-void/70 px-4 py-3 backdrop-blur-md"
-	>
-		<a href="/" class="transition-opacity hover:opacity-80" aria-label="Tangent home">
-			<BrandMark />
-		</a>
+<div class="flex min-h-dvh flex-col">
+	<!-- Full-bleed bar: the border spans the viewport; only the inner row is
+	     constrained to the reading column so the nav doesn't float mid-screen.
+	     The inner row's max-width morphs when the reader opens — a deliberate
+	     one-shot layout transition (not per-frame); reduced-motion snaps it. -->
+	<header class="sticky top-0 z-20 border-b border-hair bg-void pt-[env(safe-area-inset-top)]">
+		<div
+			class="mx-auto flex items-center justify-between px-4 py-3
+				transition-[max-width] duration-200 ease-out {shellWidth}"
+		>
+			<a href="/" class="transition-opacity hover:opacity-80" aria-label="Tangent home">
+				<BrandMark />
+			</a>
 
-		<div class="flex items-center gap-2">
-			<!-- Profile affordance: icon button with accent dot when interests are active. -->
-			<div class="relative">
-				<button
-					type="button"
-					onclick={() => (profileOpen = !profileOpen)}
-					aria-label="Your interests"
-					aria-expanded={profileOpen}
-					class="relative rounded-full p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+			<div class="flex items-center gap-2">
+				<!-- Profile affordance: icon button with accent dot when interests are active. -->
+				<div class="relative">
+					<button
+						type="button"
+						onclick={() => (profileOpen = !profileOpen)}
+						aria-label="Your interests"
+						aria-expanded={profileOpen}
+						class="icon-btn relative inline-flex items-center justify-center rounded-full p-1.5
+							text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+					>
+						<svg
+							class="size-5"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							aria-hidden="true"
+						>
+							<circle cx="12" cy="8" r="4" />
+							<path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+						</svg>
+						{#if hasProfile}
+							<!-- Dot signals that the feed is actively personalized. -->
+							<span
+								class="absolute right-1 top-1 size-2 rounded-full bg-accent"
+								aria-hidden="true"
+							></span>
+						{/if}
+					</button>
+
+					{#if profileOpen}
+						<ProfilePopover onClose={() => (profileOpen = false)} />
+					{/if}
+				</div>
+
+				<a
+					href="/start"
+					data-cta
+					class="inline-flex items-center gap-1.5 rounded-full border border-hair px-3 py-1.5
+						text-sm font-medium text-muted transition-colors hover:border-accent/50 hover:text-accent"
 				>
 					<svg
-						class="size-5"
+						class="size-4"
 						viewBox="0 0 24 24"
 						fill="none"
 						stroke="currentColor"
@@ -47,45 +83,17 @@
 						stroke-linecap="round"
 						aria-hidden="true"
 					>
-						<circle cx="12" cy="8" r="4" />
-						<path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+						<path d="M12 5v14M5 12h14" />
 					</svg>
-					{#if hasProfile}
-						<!-- Dot signals that the feed is actively personalized. -->
-						<span
-							class="absolute right-1 top-1 size-2 rounded-full bg-accent"
-							aria-hidden="true"
-						></span>
-					{/if}
-				</button>
-
-				{#if profileOpen}
-					<ProfilePopover onClose={() => (profileOpen = false)} />
-				{/if}
+					New tangent
+				</a>
 			</div>
-
-			<a
-				href="/start"
-				class="inline-flex items-center gap-1.5 rounded-full border border-hair px-3 py-1.5
-					text-sm font-medium text-muted transition-colors hover:border-accent/50 hover:text-accent"
-			>
-				<svg
-					class="size-4"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					aria-hidden="true"
-				>
-					<path d="M12 5v14M5 12h14" />
-				</svg>
-				New tangent
-			</a>
 		</div>
 	</header>
 
-	<main class="flex-1 py-6">
+	<main
+		class="mx-auto w-full flex-1 px-4 py-6 transition-[max-width] duration-200 ease-out {shellWidth}"
+	>
 		{@render children()}
 	</main>
 </div>

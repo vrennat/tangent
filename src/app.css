@@ -1,31 +1,35 @@
 @import 'tailwindcss';
 
 /*
- * Tangent design tokens. Dark-first, "Arc browser meets Twitter".
+ * Tangent design tokens — "Nightstand": a warm, brown-black dark theme that reads
+ * like a book by lamplight. One ember accent, a sage "serendipity" tone, warm neutrals.
  * Defining colors in @theme generates the utilities (bg-void, text-ink, border-hair, ...).
+ * Contrast: every text token clears WCAG AA on void/surface (faint 4.95:1, accent 8.4:1).
  */
 @theme {
-	--color-void: #08080c;
-	--color-surface: #101019;
-	--color-surface-2: #161622;
-	--color-hair: #24243a;
-	--color-hair-strong: #34344f;
+	--color-void: #15110c;
+	--color-surface: #1f1a13;
+	--color-surface-2: #2a2319;
+	--color-hair: #342d22;
+	--color-hair-strong: #473d2e;
 
-	--color-ink: #ececf4;
-	--color-muted: #9a9ab0;
-	--color-faint: #62627a;
+	--color-ink: #ece4d6;
+	--color-muted: #a89c8a;
+	--color-faint: #9b8f76;
 
-	--color-accent: #8b7bff;
-	--color-accent-soft: #6b5bd6;
-	--color-cyan: #4fd6e0;
-	--color-like: #ff5d8f;
+	/* Single ember accent + a sage discovery tone + a warm "like". No purple, no cyan. */
+	--color-accent: #e0a14e;
+	--color-accent-soft: #c8893a;
+	--color-spark: #86b39a;
+	--color-like: #e0644a;
 
-	--font-display:
-		'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	/* Newsreader (serif) carries headings and long-form reading; Hanken Grotesk the UI. */
+	--font-display: 'Newsreader', ui-serif, Georgia, 'Times New Roman', serif;
 	--font-body:
-		ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+		'Hanken Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 
-	--radius-card: 1.25rem;
+	--radius-card: 0.875rem;
+	--shadow-card: 0 10px 30px -18px rgba(0, 0, 0, 0.85);
 }
 
 html {
@@ -40,12 +44,48 @@ html {
 
 body {
 	font-family: var(--font-body);
-	/* Subtle deep-space gradient so the void isn't dead flat. */
-	background-image:
-		radial-gradient(1200px 800px at 50% -10%, rgba(139, 123, 255, 0.1), transparent 60%),
-		radial-gradient(900px 600px at 100% 100%, rgba(79, 214, 224, 0.06), transparent 55%);
-	background-attachment: fixed;
 	min-height: 100dvh;
+}
+
+/* A single faint warm wash from the top — lamplight, not glow. Painted on a
+   fixed pseudo-layer behind content rather than via `background-attachment:
+   fixed`, which forces a full repaint on every scroll frame (notably janky on
+   iOS Safari) — costly on a feed this scroll-heavy. */
+body::before {
+	content: '';
+	position: fixed;
+	inset: 0;
+	z-index: -1;
+	pointer-events: none;
+	background-image: radial-gradient(
+		1100px 700px at 50% -15%,
+		rgba(224, 161, 78, 0.05),
+		transparent 60%
+	);
+}
+
+/* Keyboard focus: one branded ring across all controls. :where() keeps specificity at
+   zero so components that style their own focus (e.g. the search field) still win.
+   Inputs are excluded here — they manage their own ring. */
+:where(a, button, [role='button'], summary):focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 2px;
+}
+
+/* Comfortable touch targets on coarse pointers (WCAG 2.5.5). Pills get height from the
+   button rule; icon-only controls (.icon-btn) and CTA links opt in explicitly.
+   `.inline` buttons (e.g. the breadcrumb's source link) are text in a sentence, not
+   tap pills — they opt out so the 44px floor doesn't inflate the line. */
+@media (pointer: coarse) {
+	button:not(:disabled):not(.inline),
+	[role='button'],
+	a[data-cta] {
+		min-block-size: 44px;
+	}
+	.icon-btn {
+		min-block-size: 44px;
+		min-inline-size: 44px;
+	}
 }
 
 /* Hide scrollbars on the feed for a cleaner immersive feel, keep scroll working. */
@@ -80,9 +120,37 @@ body {
 	}
 }
 
+/* Landing ring: a fading ember outline on the card you branched/dived/jumped to,
+   so it's obvious which article you landed on. A navigation landmark — the one
+   place a full-strength accent ring is earned — and it fades out on its own. */
+@keyframes wh-land {
+	0%,
+	55% {
+		box-shadow: 0 0 0 2px var(--color-accent);
+	}
+	100% {
+		box-shadow: 0 0 0 2px transparent;
+	}
+}
+.wh-land {
+	border-radius: var(--radius-card);
+	animation: wh-land 1.6s ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
 	html {
 		scroll-behavior: auto;
+	}
+	/* Collapse all motion to near-instant: snaps the shell max-width morph and
+	   hover/tap transforms, and calms the skeleton pulse + branch spinner, while
+	   leaving end states intact. animate-rise is removed outright below. */
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
 	}
 	.animate-rise {
 		animation: none;
@@ -96,31 +164,42 @@ body {
  */
 .wiki-content {
 	color: var(--color-muted);
-	font-size: 15px;
-	line-height: 1.7;
+	/* Long-form reading is set in the serif — the lamplight-reading feel. */
+	font-family: var(--font-display);
+	font-size: 1.0625rem;
+	line-height: 1.75;
 	overflow-wrap: break-word;
 	word-break: break-word;
 }
 .wiki-content p {
 	margin: 0 0 0.9em;
 }
+/* Links rest at ink with a faint ember-hinted underline so a link-dense paragraph
+   reads as calm prose — the full ember is saved for hover. */
 .wiki-content a {
-	color: var(--color-accent);
+	color: var(--color-ink);
 	text-decoration: none;
+	transition: color 0.12s ease;
 }
 .wiki-content a:hover {
-	text-decoration: underline;
+	color: var(--color-accent);
 }
 /* Article links dive deeper in the feed; external links leave to the web. */
 .wiki-content a.wh-dive {
 	cursor: pointer;
-	text-decoration-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+	text-decoration-color: color-mix(in oklab, var(--color-accent) 38%, transparent);
 	text-decoration-line: underline;
 	text-decoration-thickness: 1px;
 	text-underline-offset: 2px;
 }
+.wiki-content a.wh-dive:hover {
+	text-decoration-color: var(--color-accent);
+}
 .wiki-content a.wh-external {
 	color: var(--color-faint);
+}
+.wiki-content a.wh-external:hover {
+	color: var(--color-muted);
 }
 .wiki-content a.wh-external::after {
 	content: '↗';
@@ -129,24 +208,29 @@ body {
 	margin-left: 1px;
 	opacity: 0.7;
 }
-.wiki-content h2,
+/* Injected article headings are demoted one level during sanitization (h2→h3,
+   h3→h4, h4→h5) so they nest under the reader's own <h2> title instead of
+   competing with it — see sanitizeArticleHtml. These rules carry the original
+   visual weight at the shifted levels (former-h2 sections stay largest, with
+   the divider rule). */
 .wiki-content h3,
-.wiki-content h4 {
+.wiki-content h4,
+.wiki-content h5 {
 	color: var(--color-ink);
 	font-family: var(--font-display);
 	font-weight: 600;
 	line-height: 1.3;
 	margin: 1.4em 0 0.5em;
 }
-.wiki-content h2 {
+.wiki-content h3 {
 	font-size: 1.25rem;
 	padding-bottom: 0.3em;
 	border-bottom: 1px solid var(--color-hair);
 }
-.wiki-content h3 {
+.wiki-content h4 {
 	font-size: 1.1rem;
 }
-.wiki-content h4 {
+.wiki-content h5 {
 	font-size: 1rem;
 }
 .wiki-content ul,
@@ -195,9 +279,6 @@ body {
 .wiki-content sup {
 	font-size: 0.7em;
 }
-.wiki-content sup.reference a {
-	color: var(--color-cyan);
-}
 /* Tables (incl. infoboxes) scroll horizontally instead of blowing out the card. */
 .wiki-content table {
 	display: block;
@@ -218,20 +299,19 @@ body {
 	color: var(--color-ink);
 	background: var(--color-surface-2);
 }
-.wiki-content .infobox,
-.wiki-content .sidebar,
-.wiki-content .vertical-navbox {
-	float: none !important;
-	width: 100% !important;
-	margin: 1em 0 !important;
-}
 .wiki-content .hatnote {
 	color: var(--color-faint);
 	font-style: italic;
 	font-size: 0.85rem;
 	margin-bottom: 0.8em;
 }
-/* Hide editorial chrome that only makes sense on Wikipedia itself. */
+/*
+ * Hide Wikipedia chrome so the reader opens on the article, not a Wikipedia mirror.
+ * Two groups: editorial chrome that only makes sense on Wikipedia itself, and the
+ * sidebar/infobox/citation furniture that linearizes into a wall of navigation and
+ * footnote noise in our single dark column (the lavender "sidebar-heading" bars, the
+ * "Part of a series on…" link lists, and the [1][2] markers peppered through the prose).
+ */
 .wiki-content .mw-editsection,
 .wiki-content .noprint,
 .wiki-content .navbox,
@@ -241,7 +321,21 @@ body {
 .wiki-content .mbox-image,
 .wiki-content .mw-empty-elt,
 .wiki-content .mw-jump-link,
+.wiki-content .sidebar,
+.wiki-content .infobox,
+.wiki-content .vertical-navbox,
+.wiki-content .IPA,
+.wiki-content .ext-phonos,
+.wiki-content .mw-tmh-player,
+.wiki-content sup.reference,
+.wiki-content .reflist,
+.wiki-content ol.references,
 .wiki-content style,
 .wiki-content link {
 	display: none !important;
+}
+/* The lead keeps the readable respelling (rin-AY-sənss) but its link points at a
+   Help: page — drop the ↗ external marker so it doesn't look like a stray glyph. */
+.wiki-content a.wh-external[href*="/wiki/Help:"]::after {
+	content: none;
 }

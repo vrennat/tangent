@@ -236,18 +236,18 @@ class FeedState {
 	 * Attempt a related jump from the chain tip before giving up.
 	 * Called from the exhausted state to offer one more hop before start-over.
 	 */
-	async jumpRelated(): Promise<boolean> {
+	async jumpRelated(): Promise<string | null> {
 		const tip = chainTip(this.trail);
-		if (!tip) return false;
+		if (!tip) return null;
 
 		const linksResult = await fetchLinksApi(tip.title, 'related');
-		if (!linksResult.ok) return false;
+		if (!linksResult.ok) return null;
 
 		const selection = selectNext(linksResult.data, this.#context({ noSurprise: true }));
-		if (!selection) return false;
+		if (!selection) return null;
 
 		const cardResult = await fetchCardApi(selection.candidate.title);
-		if (!cardResult.ok) return false;
+		if (!cardResult.ok) return null;
 
 		const built = this.#card(cardResult.data, { fromTitle: tip.title, relation: 'related' });
 		this.cards = [...this.cards, built];
@@ -256,7 +256,7 @@ class FeedState {
 		profile.recordSeen(cardResult.data);
 		this.status = 'ready';
 		void this.#refill();
-		return true;
+		return built.id;
 	}
 
 	/**

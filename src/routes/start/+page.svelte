@@ -9,6 +9,10 @@
 	let loading = $state(false);
 	let highlighted = $state(-1);
 
+	// The listbox popup is shown (and the combobox is "expanded") whenever there's
+	// a usable query — including the loading and no-match states, not just hits.
+	const showResults = $derived(query.trim().length >= 2);
+
 	function enter(title: string) {
 		goto(`/?seed=${encodeURIComponent(title)}`);
 	}
@@ -62,7 +66,7 @@
 </svelte:head>
 
 <div class="flex flex-col items-center pt-8 pb-16 text-center">
-	<div class="mb-3 scale-150"><BrandMark size={28} /></div>
+	<div class="mb-3 text-2xl"><BrandMark size={42} /></div>
 	<h1 class="mt-6 font-display text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
 		Fall down a rabbit hole
 	</h1>
@@ -88,10 +92,12 @@
 			type="search"
 			bind:value={query}
 			placeholder="Search any topic…"
+			aria-label="Search topics"
 			autocomplete="off"
 			role="combobox"
-			aria-expanded={query.trim().length >= 2 && results.length > 0}
-			aria-controls="search-listbox"
+			aria-autocomplete="list"
+			aria-expanded={showResults}
+			aria-controls={showResults ? 'search-listbox' : undefined}
 			aria-activedescendant={highlighted >= 0 ? `start-result-${highlighted}` : undefined}
 			onkeydown={(e) => {
 				if (e.key === 'ArrowDown') {
@@ -105,16 +111,16 @@
 				}
 			}}
 			class="w-full rounded-2xl border border-hair bg-surface/80 py-3.5 pr-4 pl-11 text-ink
-				placeholder:text-faint focus:border-accent/60 focus:ring-2 focus:ring-accent/20
-				focus:outline-none"
+				placeholder:text-faint focus:border-accent/60 focus:ring-2 focus:ring-accent
+				focus:ring-offset-2 focus:ring-offset-void focus:outline-none"
 		/>
 
-		{#if query.trim().length >= 2}
+		{#if showResults}
 			<ul
 				id="search-listbox"
 				role="listbox"
 				class="absolute z-10 mt-2 w-full overflow-hidden rounded-2xl border border-hair
-					bg-surface text-left shadow-2xl shadow-black/40"
+					bg-surface text-left shadow-card"
 			>
 				{#if loading && results.length === 0}
 					<li class="px-4 py-3 text-sm text-faint">Searching…</li>
@@ -134,6 +140,7 @@
 									<img
 										src={result.thumbnail.source}
 										alt=""
+										loading="lazy"
 										class="size-9 shrink-0 rounded-lg object-cover"
 									/>
 								{:else}
@@ -159,8 +166,8 @@
 	<button
 		type="button"
 		onclick={surprise}
-		class="mt-5 inline-flex items-center gap-2 rounded-full border border-cyan/30 bg-cyan/5
-			px-4 py-2 text-sm font-medium text-cyan transition-all hover:bg-cyan/10 active:scale-95"
+		class="mt-5 inline-flex items-center gap-2 rounded-full border border-spark/30 bg-spark/5
+			px-4 py-2 text-sm font-medium text-spark transition-all hover:bg-spark/10 active:scale-95"
 	>
 		<svg class="size-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
 			<path d="M12 2l1.9 5.6L19.5 9l-5.6 1.9L12 16l-1.9-5.1L4.5 9l5.6-1.4L12 2z" />

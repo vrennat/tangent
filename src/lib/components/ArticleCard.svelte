@@ -6,11 +6,14 @@
 	let {
 		card,
 		onBranch,
-		onRead
+		onRead,
+		onNavigateToSource
 	}: {
 		card: FeedCard;
 		onBranch: (card: FeedCard) => Promise<void> | void;
 		onRead: (card: FeedCard) => void;
+		/** Jump to the card this one branched/linked/dove from, if it's in view. */
+		onNavigateToSource?: () => void;
 	} = $props();
 
 	const article = $derived(card.article);
@@ -83,24 +86,16 @@
 	bind:this={el}
 	onclick={handleCardTap}
 	class="animate-rise block cursor-pointer overflow-hidden rounded-[var(--radius-card)] border border-hair
-		bg-surface/80 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.6)] backdrop-blur-sm
-		transition-colors hover:border-hair-strong"
+		bg-surface shadow-card transition-colors hover:border-hair-strong"
 >
 	<div class="space-y-3 p-5 sm:p-6">
-		<ConnectionBreadcrumb connection={card.connection} />
+		<ConnectionBreadcrumb connection={card.connection} onNavigate={onNavigateToSource} />
 
-		<!-- Title + one-liner lead; the image is a small inset garnish, not a hero. -->
-		<div class="flex items-start gap-4">
-			<div class="min-w-0 flex-1 space-y-1">
-				<h2 class="font-display text-2xl leading-tight font-semibold tracking-tight text-ink">
-					{article.title}
-				</h2>
-
-				{#if article.description}
-					<p class="text-sm text-faint italic">{article.description}</p>
-				{/if}
-			</div>
-
+		<!-- Title, lead, and summary flow around a small floated thumbnail inset — it's
+		     a garnish, not a hero, and letting the text wrap beside and below it keeps a
+		     short card from stranding the image in whitespace. flow-root contains the
+		     float so the actions row below clears it. -->
+		<div class="flow-root">
 			{#if article.thumbnail && !imageFailed}
 				<!-- Decorative: the title alongside already names it, so alt is empty. -->
 				<img
@@ -108,14 +103,22 @@
 					alt=""
 					loading="lazy"
 					onerror={() => (imageFailed = true)}
-					class="size-20 shrink-0 rounded-xl border border-hair object-cover sm:size-24"
+					class="float-right mb-2 ml-4 size-20 rounded-xl border border-hair object-cover object-top sm:size-24"
 				/>
 			{/if}
-		</div>
 
-		<!-- Full summary extract: the hook. Wikipedia bounds this to a sentence-complete
-		     few paragraphs, so we show it whole rather than clamping it to a stub. -->
-		<p class="text-[15px] leading-relaxed text-muted">{article.extract}</p>
+			<h2 class="font-display text-2xl leading-tight font-semibold tracking-tight text-ink">
+				{article.title}
+			</h2>
+
+			{#if article.description}
+				<p class="mt-1 font-display text-[15px] text-faint italic">{article.description}</p>
+			{/if}
+
+			<!-- Full summary extract: the hook. Wikipedia bounds this to a sentence-complete
+			     few paragraphs, so we show it whole rather than clamping it to a stub. -->
+			<p class="mt-3 font-display text-base leading-relaxed text-muted">{article.extract}</p>
+		</div>
 
 		<div class="flex flex-wrap items-center gap-2 pt-1">
 			<button
@@ -174,12 +177,13 @@
 			<button
 				type="button"
 				onclick={read}
-				class="ml-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm
-					font-medium text-faint transition-colors hover:text-ink"
+				class="group ml-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm
+					font-medium text-muted transition-colors hover:text-ink"
 			>
 				Read article
+				<!-- Arrow, not a chevron: this opens the reader pane, it doesn't expand in place. -->
 				<svg
-					class="size-3.5"
+					class="size-3.5 transition-transform group-hover:translate-x-0.5"
 					viewBox="0 0 24 24"
 					fill="none"
 					stroke="currentColor"
@@ -188,7 +192,7 @@
 					stroke-linejoin="round"
 					aria-hidden="true"
 				>
-					<path d="m6 9 6 6 6-6" />
+					<path d="M5 12h14M13 6l6 6-6 6" />
 				</svg>
 			</button>
 		</div>

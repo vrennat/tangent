@@ -1,7 +1,14 @@
 <script lang="ts">
 	import type { Connection } from '$lib/feed/types';
 
-	let { connection }: { connection: Connection } = $props();
+	let {
+		connection,
+		onNavigate
+	}: {
+		connection: Connection;
+		/** Jump to the card this one came from. Absent when the source isn't in view. */
+		onNavigate?: () => void;
+	} = $props();
 
 	const label = $derived(
 		{
@@ -19,7 +26,7 @@
 
 <div
 	class="flex items-center gap-2 text-xs font-medium tracking-wide
-		{isSurprise ? 'text-cyan' : isSeed ? 'text-accent' : 'text-muted'}"
+		{isSurprise ? 'text-spark' : isSeed ? 'text-accent' : 'text-muted'}"
 >
 	{#if isSeed}
 		<!-- sparkle -->
@@ -59,7 +66,20 @@
 
 	<span class="uppercase">
 		{label}{#if !isSeed}
-			<span class="ml-1 text-ink normal-case">{connection.fromTitle}</span>
+			{#if onNavigate}
+				<!-- `inline` keeps the coarse-pointer 44px min-height (app.css) from
+				     inflating this in-line text button; it reads as a link, not a pill. -->
+				<button
+					type="button"
+					onclick={onNavigate}
+					title="Jump to {connection.fromTitle}"
+					class="ml-1 inline font-semibold text-ink normal-case underline decoration-transparent
+						underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
+					>{connection.fromTitle}</button
+				>
+			{:else}
+				<span class="ml-1 font-semibold text-ink normal-case">{connection.fromTitle}</span>
+			{/if}
 		{/if}
 	</span>
 </div>

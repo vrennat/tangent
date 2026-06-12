@@ -13,6 +13,7 @@
 		onDive?: (title: string) => void;
 	} = $props();
 
+	let asideEl = $state<HTMLElement | null>(null);
 	let scrollEl = $state<HTMLElement | null>(null);
 	let contentEl = $state<HTMLElement | null>(null);
 	let articleHtml = $state<string | null>(null);
@@ -85,6 +86,18 @@
 		contentEl.addEventListener('click', onClick);
 		return () => contentEl?.removeEventListener('click', onClick);
 	});
+
+	// On mobile the reader is a full-screen takeover, so move focus into it on open
+	// and restore it to the trigger on close — otherwise keyboard/SR users are left
+	// behind it, tabbing through hidden feed content. On desktop (lg+) it's a
+	// non-modal in-flow pane beside the feed, so focus stays where it was.
+	$effect(() => {
+		if (!asideEl) return;
+		if (window.matchMedia('(min-width: 1024px)').matches) return;
+		const trigger = document.activeElement as HTMLElement | null;
+		asideEl.focus();
+		return () => trigger?.focus?.();
+	});
 </script>
 
 <svelte:window
@@ -99,26 +112,29 @@
 	real part of the page (no backdrop, no modal); the feed stays scrollable alongside.
 -->
 <aside
+	bind:this={asideEl}
+	tabindex="-1"
 	aria-label="Article reader"
-	class="animate-rise fixed inset-0 z-40 flex flex-col bg-void text-ink
+	class="animate-rise fixed inset-0 z-40 flex flex-col bg-void text-ink focus:outline-none
 		lg:sticky lg:inset-auto lg:top-16 lg:z-auto lg:h-[calc(100dvh-5rem)] lg:flex-1
-		lg:min-w-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-hair
-		lg:shadow-[0_8px_40px_-12px_rgba(0,0,0,0.6)]"
+		lg:min-w-0 lg:overflow-hidden lg:rounded-[var(--radius-card)] lg:border lg:border-hair
+		lg:shadow-card"
 >
-	<!-- Sticky header -->
+	<!-- Sticky header. Extra top padding clears the notch when the reader is a
+	     full-screen takeover on mobile (reset on desktop, where it sits below the app bar). -->
 	<div
-		class="z-10 flex items-start gap-3 border-b border-hair bg-surface/90 px-4 py-3
-			backdrop-blur-sm sm:px-6"
+		class="z-10 flex items-start gap-3 border-b border-hair bg-surface px-4 sm:px-6
+			pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3 lg:pt-3"
 	>
-		<h2 class="font-display flex-1 text-lg leading-snug font-semibold tracking-tight text-ink">
+		<h2 class="font-display flex-1 text-xl leading-snug font-semibold tracking-tight text-ink">
 			{article.title}
 		</h2>
 		<button
 			type="button"
 			onclick={onClose}
 			aria-label="Close article"
-			class="mt-0.5 shrink-0 rounded-full p-1.5 text-muted transition-colors
-				hover:bg-surface-2 hover:text-ink"
+			class="icon-btn mt-0.5 inline-flex shrink-0 items-center justify-center rounded-full p-1.5
+				text-muted transition-colors hover:bg-surface-2 hover:text-ink"
 		>
 			<svg
 				class="size-5"
@@ -134,8 +150,11 @@
 		</button>
 	</div>
 
-	<!-- Scrollable body -->
-	<div bind:this={scrollEl} class="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+	<!-- Scrollable body. Bottom padding clears the home indicator on mobile. -->
+	<div
+		bind:this={scrollEl}
+		class="flex-1 overflow-y-auto px-4 pt-6 sm:px-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
+	>
 		{#if htmlLoading}
 			<div class="space-y-2.5" aria-hidden="true">
 				{#each { length: 8 } as _}
@@ -161,7 +180,7 @@
 					href={article.wikiUrl}
 					target="_blank"
 					rel="noopener noreferrer"
-					class="text-xs font-medium text-faint transition-colors hover:text-ink"
+					class="inline-flex items-center py-1 text-xs font-medium text-faint transition-colors hover:text-ink"
 					>Open on Wikipedia ↗</a
 				>
 			</div>

@@ -86,13 +86,25 @@
 		return () => io.disconnect();
 	});
 
-	async function handleBranch(card: FeedCard) {
-		const id = await feed.branchFrom(card);
-		if (!id) return;
+	// Scroll a card into view and flag it as the landing target, so a fading ember
+	// ring marks which article an explicit branch/dive/jump took you to — the new
+	// card is appended at the tail, where it'd otherwise be hard to pick out.
+	let landedId = $state<string | null>(null);
+	let landedTimer: ReturnType<typeof setTimeout> | undefined;
+
+	async function goToCard(id: string) {
 		await tick();
 		document
 			.querySelector(`[data-card="${id}"]`)
 			?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		landedId = id;
+		clearTimeout(landedTimer);
+		landedTimer = setTimeout(() => (landedId = null), 1600);
+	}
+
+	async function handleBranch(card: FeedCard) {
+		const id = await feed.branchFrom(card);
+		if (id) await goToCard(id);
 	}
 
 	function handleRead(card: FeedCard) {
@@ -102,11 +114,7 @@
 	async function handleDive(title: string) {
 		reader.close();
 		const id = await feed.addDive(title);
-		if (!id) return;
-		await tick();
-		document
-			.querySelector(`[data-card="${id}"]`)
-			?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		if (id) await goToCard(id);
 	}
 
 	let jumpingRelated = $state(false);
@@ -115,8 +123,9 @@
 		if (jumpingRelated) return;
 		jumpingRelated = true;
 		try {
-			const ok = await feed.jumpRelated();
-			if (!ok) feed.showStartOver = true;
+			const id = await feed.jumpRelated();
+			if (id) await goToCard(id);
+			else feed.showStartOver = true;
 		} finally {
 			jumpingRelated = false;
 		}
@@ -126,11 +135,28 @@
 
 	async function handleTrailSelect(id: string) {
 		trailOpen = false;
-		await tick();
-		document
-			.querySelector(`[data-card="${id}"]`)
-			?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		await goToCard(id);
 	}
+
+	// For each card, the id of the card it came from — the nearest earlier card whose
+	// title matches its breadcrumb's `fromTitle`. Lets a card's "from X" jump back to
+	// the source so the thread is navigable, not just labelled. Absent when the source
+	// scrolled out of the chain (e.g. trimmed on rehydrate) or for the seed.
+	const sourceIdByCard = $derived.by(() => {
+		const map = new Map<string, string>();
+		const cards = feed.cards;
+		for (let i = 0; i < cards.length; i++) {
+			const from = cards[i].connection.fromTitle;
+			if (!from) continue;
+			for (let j = i - 1; j >= 0; j--) {
+				if (cards[j].article.title === from) {
+					map.set(cards[i].id, cards[j].id);
+					break;
+				}
+			}
+		}
+		return map;
+	});
 </script>
 
 <svelte:head>
@@ -150,12 +176,14 @@
 <div class={reader.isOpen ? 'lg:flex lg:items-start lg:gap-6' : ''}>
 	<!-- `contents` when closed so the feed keeps its exact single-column layout. -->
 	<div class={reader.isOpen ? 'lg:w-[42%] lg:shrink-0 lg:min-w-0' : 'contents'}>
+		<h1 class="sr-only">Tangent — {feed.seedTitle ?? 'a Wikipedia rabbit hole'}</h1>
 		{#if feed.status === 'error'}
 	<div class="flex flex-col items-center gap-4 py-20 text-center">
 		<p class="text-muted">{feed.error}</p>
 		<a
 			href="/start"
-			class="rounded-full bg-accent px-4 py-2 text-sm font-medium text-void
+			data-cta
+			class="inline-flex items-center rounded-full bg-accent px-4 py-2 text-sm font-medium text-void
 				transition-opacity hover:opacity-90">Pick a starting point</a
 		>
 	</div>
@@ -172,8 +200,8 @@
 			<button
 				type="button"
 				onclick={() => (trailOpen = true)}
-				class="inline-flex items-center gap-1.5 rounded-full border border-hair bg-void/80
-					px-3 py-1.5 text-xs font-medium text-muted backdrop-blur-sm transition-colors
+				class="inline-flex items-center gap-1.5 rounded-full border border-hair bg-surface
+					px-3 py-1.5 text-xs font-medium text-muted transition-colors
 					hover:border-accent/50 hover:text-accent"
 			>
 				{feed.trail.length} deep
@@ -194,8 +222,14 @@
 
 	<div class="space-y-5">
 		{#each feed.cards as card (card.id)}
-			<div data-card={card.id} class="scroll-mt-20">
-				<ArticleCard {card} onBranch={handleBranch} onRead={handleRead} />
+			{@const sourceId = sourceIdByCard.get(card.id)}
+			<div data-card={card.id} class="scroll-mt-20" class:wh-land={card.id === landedId}>
+				<ArticleCard
+					{card}
+					onBranch={handleBranch}
+					onRead={handleRead}
+					onNavigateToSource={sourceId ? () => goToCard(sourceId) : undefined}
+				/>
 			</div>
 		{/each}
 	</div>
@@ -231,7 +265,8 @@
 				{/if}
 				<a
 					href="/start"
-					class="rounded-full border border-hair px-4 py-2 text-sm font-medium text-muted
+					data-cta
+					class="inline-flex items-center rounded-full border border-hair px-4 py-2 text-sm font-medium text-muted
 						transition-colors hover:border-accent/50 hover:text-accent">Start a new tangent</a
 				>
 			</div>
