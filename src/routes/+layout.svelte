@@ -3,15 +3,23 @@
 	import BrandMark from '$lib/components/BrandMark.svelte';
 	import ProfilePopover from '$lib/components/ProfilePopover.svelte';
 	import { profile } from '$lib/engagement/profile.svelte';
+	import { reader } from '$lib/reader/readerState.svelte';
 
 	let { children } = $props();
 
 	const hasProfile = $derived(Object.keys(profile.tokenWeights).length > 0);
 
 	let profileOpen = $state(false);
+
+	// Reading widens the shell into a two-pane split (feed + article). Stays the
+	// narrow reading column otherwise, and on narrow screens where the reader is a
+	// full-screen takeover rather than a side pane.
+	const shellWidth = $derived(reader.isOpen ? 'max-w-2xl lg:max-w-7xl' : 'max-w-2xl');
 </script>
 
-<div class="mx-auto flex min-h-dvh max-w-2xl flex-col px-4">
+<div
+	class="mx-auto flex min-h-dvh flex-col px-4 transition-[max-width] duration-200 ease-out {shellWidth}"
+>
 	<header
 		class="sticky top-0 z-20 -mx-4 flex items-center justify-between border-b border-hair/60
 			bg-void/70 px-4 py-3 backdrop-blur-md"

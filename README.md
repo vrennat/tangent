@@ -36,12 +36,12 @@ Other scripts: `bun run check` (svelte-check), `bun run test` (vitest), `bun run
    steps via the Action API `generator=links` (one call enriches links with image +
    description). Sparse articles fall back to `morelike:` related pages.
 3. **Choose** — the pure feed engine (`src/lib/feed/`) scores candidates by relevance
-   (overlap with the user's liked-token interest vector), rewards images, penalizes
-   monotony, and fires a **surprise** epsilon for serendipity. Selection is a
-   softmax-weighted pick among the top scorers, not a robotic argmax.
-4. **Render** — the chosen article's summary is fetched fresh and shown with a
-   breadcrumb explaining the connection. The next few cards are prefetched so
-   scrolling stays smooth.
+   (overlap with the user's liked-token interest vector), penalizes monotony, only
+   lightly prefers illustrated cards, and fires a **surprise** epsilon for serendipity.
+   Selection is a softmax-weighted pick among the top scorers, not a robotic argmax.
+4. **Render** — the chosen article's full summary extract leads the card as its hook,
+   with a breadcrumb explaining the connection and the image demoted to a small inset.
+   The next few cards are prefetched so scrolling stays smooth.
 
 Engagement (likes, dwell time, clickthroughs) lives in `localStorage` and feeds the
 interest vector. Tunable knobs live in `src/lib/feed/config.ts`.

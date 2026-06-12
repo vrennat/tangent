@@ -17,6 +17,9 @@
 	const liked = $derived(profile.isLiked(article.title));
 
 	let branching = $state(false);
+	// Wikipedia thumbnails (especially body-scraped fallbacks) sometimes 404. The inset
+	// is decorative garnish, so a broken one collapses rather than showing a broken box.
+	let imageFailed = $state(false);
 
 	async function branch() {
 		if (branching) return;
@@ -83,38 +86,36 @@
 		bg-surface/80 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.6)] backdrop-blur-sm
 		transition-colors hover:border-hair-strong"
 >
-	{#if article.thumbnail}
-		<div class="relative aspect-[16/10] w-full overflow-hidden bg-surface-2">
-			<img
-				src={article.thumbnail.source}
-				alt={article.title}
-				loading="lazy"
-				class="size-full object-cover"
-			/>
-			<div
-				class="pointer-events-none absolute inset-0 bg-gradient-to-t from-surface/90 via-transparent to-transparent"
-			></div>
-		</div>
-	{:else}
-		<!-- No usable image anywhere in the article: a slim brand strip instead of a hollow hero. -->
-		<div
-			class="h-1.5 w-full bg-gradient-to-r from-accent/70 via-cyan/40 to-transparent"
-			aria-hidden="true"
-		></div>
-	{/if}
-
 	<div class="space-y-3 p-5 sm:p-6">
 		<ConnectionBreadcrumb connection={card.connection} />
 
-		<h2 class="font-display text-2xl leading-tight font-semibold tracking-tight text-ink">
-			{article.title}
-		</h2>
+		<!-- Title + one-liner lead; the image is a small inset garnish, not a hero. -->
+		<div class="flex items-start gap-4">
+			<div class="min-w-0 flex-1 space-y-1">
+				<h2 class="font-display text-2xl leading-tight font-semibold tracking-tight text-ink">
+					{article.title}
+				</h2>
 
-		{#if article.description}
-			<p class="text-sm text-faint italic">{article.description}</p>
-		{/if}
+				{#if article.description}
+					<p class="text-sm text-faint italic">{article.description}</p>
+				{/if}
+			</div>
 
-		<p class="clamp-4 text-[15px] leading-relaxed text-muted">{article.extract}</p>
+			{#if article.thumbnail && !imageFailed}
+				<!-- Decorative: the title alongside already names it, so alt is empty. -->
+				<img
+					src={article.thumbnail.source}
+					alt=""
+					loading="lazy"
+					onerror={() => (imageFailed = true)}
+					class="size-20 shrink-0 rounded-xl border border-hair object-cover sm:size-24"
+				/>
+			{/if}
+		</div>
+
+		<!-- Full summary extract: the hook. Wikipedia bounds this to a sentence-complete
+		     few paragraphs, so we show it whole rather than clamping it to a stub. -->
+		<p class="text-[15px] leading-relaxed text-muted">{article.extract}</p>
 
 		<div class="flex flex-wrap items-center gap-2 pt-1">
 			<button

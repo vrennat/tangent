@@ -10,8 +10,13 @@ export const FEED = {
 	base: 1,
 	/** Weight on relevance (overlap with the user's interest vector). Squashed via tanh. */
 	relevanceWeight: 2.5,
-	/** Bonus for candidates that have a lead image (richer cards). */
-	imageBonus: 0.6,
+	/**
+	 * Gentle tiebreaker for candidates that have a lead image. Deliberately small:
+	 * the card leads with the article's hook text, not the picture (Wikipedia images
+	 * are often mediocre), so image-availability nudges ties but must not shape which
+	 * articles the rabbit hole surfaces.
+	 */
+	imageBonus: 0.15,
 	/**
 	 * Prominence boost for links that appear early in the source article (the lead
 	 * section). This is what makes the feed feel like exploring an article's actual

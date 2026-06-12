@@ -13,25 +13,24 @@
 		onDive?: (title: string) => void;
 	} = $props();
 
-	let dialogEl = $state<HTMLDialogElement | null>(null);
+	let scrollEl = $state<HTMLElement | null>(null);
 	let contentEl = $state<HTMLElement | null>(null);
 	let articleHtml = $state<string | null>(null);
 	let htmlLoading = $state(false);
 	let htmlError = $state(false);
 
-	// Open modal and fetch content when the component mounts.
-	// showModal() is browser-only; the $effect guard handles SSR safety.
-	// The fetch is aborted on unmount so a quickly-closed overlay doesn't waste the request.
+	// Fetch the inline article HTML. Re-runs when `article` changes — opening a new
+	// card while the panel is already open swaps the content in place. The request is
+	// aborted on unmount/swap so a quick change doesn't waste it.
 	$effect(() => {
-		if (!dialogEl) return;
-		dialogEl.showModal();
+		const title = article.title;
+		if (scrollEl) scrollEl.scrollTop = 0;
 
 		const controller = new AbortController();
+		articleHtml = null;
 		htmlLoading = true;
 		htmlError = false;
-		fetch(`/api/article?title=${encodeURIComponent(article.title)}`, {
-			signal: controller.signal
-		})
+		fetch(`/api/article?title=${encodeURIComponent(title)}`, { signal: controller.signal })
 			.then((res) => res.json())
 			.then((data: { html: string | null }) => {
 				if (data.html) articleHtml = data.html;
@@ -86,41 +85,37 @@
 		contentEl.addEventListener('click', onClick);
 		return () => contentEl?.removeEventListener('click', onClick);
 	});
-
-	function dismiss() {
-		dialogEl?.close();
-		onClose();
-	}
 </script>
 
-<!-- Native dialog handles top-layer and Esc; oncancel fires on Esc before onclose. -->
-<!-- On desktop (lg+) the dialog becomes a right-side panel so the feed stays visible. -->
-<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-<dialog
-	bind:this={dialogEl}
-	oncancel={(e) => {
-		e.preventDefault();
-		dismiss();
+<svelte:window
+	onkeydown={(e) => {
+		if (e.key === 'Escape') onClose();
 	}}
-	class="fixed inset-0 z-50 m-0 flex h-full w-full max-h-none max-w-none flex-col
-		border-none bg-void p-0 text-ink backdrop:bg-black/60 backdrop:backdrop-blur-sm
-		lg:inset-y-0 lg:right-0 lg:left-auto lg:w-[min(48%,720px)] lg:rounded-l-2xl
-		lg:overflow-hidden lg:[box-shadow:-8px_0_40px_rgba(0,0,0,0.5)]
-		lg:animate-[slide-from-right_0.2s_ease-out]"
+/>
+
+<!--
+	Mobile (base): a full-screen takeover — there's no room beside the feed.
+	Desktop (lg+): an in-flow, sticky right-hand pane that sits next to the feed as a
+	real part of the page (no backdrop, no modal); the feed stays scrollable alongside.
+-->
+<aside
+	aria-label="Article reader"
+	class="animate-rise fixed inset-0 z-40 flex flex-col bg-void text-ink
+		lg:sticky lg:inset-auto lg:top-16 lg:z-auto lg:h-[calc(100dvh-5rem)] lg:flex-1
+		lg:min-w-0 lg:overflow-hidden lg:rounded-2xl lg:border lg:border-hair
+		lg:shadow-[0_8px_40px_-12px_rgba(0,0,0,0.6)]"
 >
 	<!-- Sticky header -->
 	<div
 		class="z-10 flex items-start gap-3 border-b border-hair bg-surface/90 px-4 py-3
 			backdrop-blur-sm sm:px-6"
 	>
-		<h2
-			class="font-display flex-1 text-lg font-semibold leading-snug tracking-tight text-ink"
-		>
+		<h2 class="font-display flex-1 text-lg leading-snug font-semibold tracking-tight text-ink">
 			{article.title}
 		</h2>
 		<button
 			type="button"
-			onclick={dismiss}
+			onclick={onClose}
 			aria-label="Close article"
 			class="mt-0.5 shrink-0 rounded-full p-1.5 text-muted transition-colors
 				hover:bg-surface-2 hover:text-ink"
@@ -140,7 +135,7 @@
 	</div>
 
 	<!-- Scrollable body -->
-	<div class="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+	<div bind:this={scrollEl} class="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
 		{#if htmlLoading}
 			<div class="space-y-2.5" aria-hidden="true">
 				{#each { length: 8 } as _}
@@ -172,4 +167,4 @@
 			</div>
 		{/if}
 	</div>
-</dialog>
+</aside>

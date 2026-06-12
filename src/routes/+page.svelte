@@ -3,11 +3,12 @@
 	import { browser } from '$app/environment';
 	import { page } from '$app/state';
 	import { feed } from '$lib/feed/feedState.svelte';
+	import { reader } from '$lib/reader/readerState.svelte';
 	import { loadTrail } from '$lib/feed/trail';
 	import type { FeedCard } from '$lib/feed/types';
 	import { randomSeed } from '$lib/seeds';
 	import ArticleCard from '$lib/components/ArticleCard.svelte';
-	import ArticleOverlay from '$lib/components/ArticleOverlay.svelte';
+	import ArticleReader from '$lib/components/ArticleReader.svelte';
 	import TrailPanel from '$lib/components/TrailPanel.svelte';
 	import SkeletonCard from '$lib/components/SkeletonCard.svelte';
 
@@ -94,19 +95,12 @@
 			?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 	}
 
-	// Overlay state: the card currently open in the reader (null = closed).
-	let readerCard = $state<FeedCard | null>(null);
-
 	function handleRead(card: FeedCard) {
-		readerCard = card;
-	}
-
-	function handleOverlayClose() {
-		readerCard = null;
+		reader.open(card);
 	}
 
 	async function handleDive(title: string) {
-		readerCard = null;
+		reader.close();
 		const id = await feed.addDive(title);
 		if (!id) return;
 		await tick();
@@ -143,14 +137,6 @@
 	<title>{feed.seedTitle ? `${feed.seedTitle} · Tangent` : 'Tangent'}</title>
 </svelte:head>
 
-{#if readerCard}
-	<ArticleOverlay
-		article={readerCard.article}
-		onClose={handleOverlayClose}
-		onDive={handleDive}
-	/>
-{/if}
-
 {#if trailOpen}
 	<TrailPanel
 		trail={feed.trail}
@@ -160,7 +146,11 @@
 	/>
 {/if}
 
-{#if feed.status === 'error'}
+<!-- Reading splits the page into two panes (lg+): feed on the left, article on the right. -->
+<div class={reader.isOpen ? 'lg:flex lg:items-start lg:gap-6' : ''}>
+	<!-- `contents` when closed so the feed keeps its exact single-column layout. -->
+	<div class={reader.isOpen ? 'lg:w-[42%] lg:shrink-0 lg:min-w-0' : 'contents'}>
+		{#if feed.status === 'error'}
 	<div class="flex flex-col items-center gap-4 py-20 text-center">
 		<p class="text-muted">{feed.error}</p>
 		<a
@@ -249,4 +239,14 @@
 			<SkeletonCard />
 		{/if}
 	</div>
-{/if}
+		{/if}
+	</div>
+
+	{#if reader.card}
+		<ArticleReader
+			article={reader.card.article}
+			onClose={() => reader.close()}
+			onDive={handleDive}
+		/>
+	{/if}
+</div>
