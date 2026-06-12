@@ -1,13 +1,21 @@
 <script lang="ts">
 	import '../app.css';
+	import { page } from '$app/state';
 	import BrandMark from '$lib/components/BrandMark.svelte';
 	import ProfilePopover from '$lib/components/ProfilePopover.svelte';
 	import { profile } from '$lib/engagement/profile.svelte';
 	import { reader } from '$lib/reader/readerState.svelte';
+	import { feed } from '$lib/feed/feedState.svelte';
+	import { trailPanel } from '$lib/feed/trailPanel.svelte';
 
 	let { children } = $props();
 
 	const hasProfile = $derived(Object.keys(profile.tokenWeights).length > 0);
+	// Trail = articles you've actually reached (scrolled to / dwelled on). Shown in the
+	// header once there's more than just the seed, so it's reachable without a floating chip.
+	// Only on the feed route — that's where the panel itself is rendered.
+	const seenCount = $derived(feed.trail.filter((n) => n.seen).length);
+	const showTrail = $derived(page.url.pathname === '/' && seenCount > 1);
 
 	let profileOpen = $state(false);
 
@@ -32,6 +40,39 @@
 			</a>
 
 			<div class="flex items-center gap-2">
+				<!-- Trail: opens the panel of articles you've actually reached. Hidden until
+				     you're past the seed; a subtle count badge stands in for the old chip. -->
+				{#if showTrail}
+					<button
+						type="button"
+						onclick={() => trailPanel.toggle()}
+						aria-label="Your trail, {seenCount} articles"
+						class="icon-btn relative inline-flex items-center justify-center rounded-full p-1.5
+							text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+					>
+						<svg
+							class="size-5"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							aria-hidden="true"
+						>
+							<circle cx="5" cy="6" r="1.4" fill="currentColor" stroke="none" />
+							<circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none" />
+							<circle cx="5" cy="18" r="1.4" fill="currentColor" stroke="none" />
+							<path d="M10 6h9M10 12h9M10 18h9" />
+						</svg>
+						<span
+							class="absolute -right-0.5 -top-0.5 grid h-4 min-w-[1rem] place-items-center
+								rounded-full bg-surface-2 px-1 text-[10px] font-semibold text-muted ring-1 ring-hair"
+							aria-hidden="true">{seenCount}</span
+						>
+					</button>
+				{/if}
+
 				<!-- Profile affordance: icon button with accent dot when interests are active. -->
 				<div class="relative">
 					<button

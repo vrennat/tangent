@@ -52,13 +52,19 @@ class FeedState {
 	trail = $state<TrailNode[]>([]);
 	status = $state<Status>('idle');
 	error = $state<string | null>(null);
+	/** The raw seed param — used as the storage key and for rehydrate matching. */
 	seedTitle = $state<string | null>(null);
+	/** The seed's canonical Wikipedia title, for the page <title> (the param may be a
+	 *  slug like "Silk_Road" or a not-yet-resolved guess). */
+	displayTitle = $state<string | null>(null);
 	rehydrating = $state(false);
 	/** When true, jumpRelated also failed — only start-over remains. */
 	showStartOver = $state(false);
 
 	#buffer: FeedCard[] = [];
 	#counter = 0;
+	/** Guards branchFrom so rapid "More like this" taps don't stack branches / race the buffer. */
+	#branching = false;
 	/** Serializes builds so each one sees a consistent chain tip. */
 	#tail: Promise<boolean> = Promise.resolve(false);
 	/**
@@ -88,6 +94,7 @@ class FeedState {
 		this.trail = [];
 		this.error = null;
 		this.seedTitle = seedTitle;
+		this.displayTitle = null;
 		this.status = 'loading';
 		this.rehydrating = false;
 		this.showStartOver = false;
@@ -99,9 +106,11 @@ class FeedState {
 			return;
 		}
 
+		this.displayTitle = result.data.title;
 		const seedCard = this.#card(result.data, { fromTitle: '', relation: 'seed' });
 		this.cards = [seedCard];
-		this.trail = [this.#trailNode(seedCard)];
+		// The seed is where you start, so it's seen from the outset.
+		this.trail = [this.#trailNode(seedCard, true)];
 		if (browser) saveTrail(seedTitle, this.trail);
 		profile.recordSeen(result.data);
 		this.status = 'ready';
@@ -127,24 +136,33 @@ class FeedState {
 
 	/** "More like this": steer the hole toward a card via its related pages. */
 	async branchFrom(card: FeedCard): Promise<string | null> {
-		const linksResult = await fetchLinksApi(card.article.title, 'related');
-		if (!linksResult.ok) return null;
+		if (this.#branching) return null;
+		this.#branching = true;
+		try {
+			const linksResult = await fetchLinksApi(card.article.title, 'related');
+			if (!linksResult.ok) return null;
 
-		// branchFrom is a deliberate steering action — never surprise here.
-		const selection = selectNext(linksResult.data, this.#context({ noSurprise: true }));
-		if (!selection) return null;
+			// branchFrom is a deliberate steering action — never surprise here.
+			const selection = selectNext(linksResult.data, this.#context({ noSurprise: true }));
+			if (!selection) return null;
 
-		const cardResult = await fetchCardApi(selection.candidate.title);
-		if (!cardResult.ok) return null;
+			const cardResult = await fetchCardApi(selection.candidate.title);
+			if (!cardResult.ok) return null;
 
-		this.#buffer = [];
-		const built = this.#card(cardResult.data, { fromTitle: card.article.title, relation: 'related' });
-		this.cards = [...this.cards, built];
-		this.trail = [...this.trail, this.#trailNode(built)];
-		if (browser) saveTrail(this.seedTitle ?? '', this.trail);
-		profile.recordSeen(cardResult.data);
-		void this.#refill();
-		return built.id;
+			this.#buffer = [];
+			const built = this.#card(cardResult.data, {
+				fromTitle: card.article.title,
+				relation: 'related'
+			});
+			this.cards = [...this.cards, built];
+			this.trail = [...this.trail, this.#trailNode(built)];
+			if (browser) saveTrail(this.seedTitle ?? '', this.trail);
+			profile.recordSeen(cardResult.data);
+			void this.#refill();
+			return built.id;
+		} finally {
+			this.#branching = false;
+		}
 	}
 
 	/**
@@ -197,6 +215,7 @@ class FeedState {
 		this.#buffer = [];
 		this.trail = stored.trail;
 		this.seedTitle = stored.seedTitle;
+		this.displayTitle = stored.trail[0]?.title ?? stored.seedTitle;
 		this.error = null;
 		this.showStartOver = false;
 
@@ -272,7 +291,21 @@ class FeedState {
 		return (async () => {
 			while (this.#buffer.length < PREFETCH_TARGET && this.status !== 'exhausted') {
 				const ok = await this.#buildNext();
-				if (!ok) break;
+				if (!ok) {
+					// A build came up dry. If nothing is buffered and we're still 'ready'
+					// (not a retryable network 'stalled'), the hole has run out of links —
+					// flip to 'exhausted' so the "run dry" UI shows instead of an eternal
+					// skeleton, which it otherwise would when the sentinel stays in view and
+					// the IntersectionObserver never re-fires to call more() again.
+					if (
+						this.#buffer.length === 0 &&
+						this.cards.length > 0 &&
+						this.status === 'ready'
+					) {
+						this.status = 'exhausted';
+					}
+					break;
+				}
 			}
 		})();
 	}
@@ -374,15 +407,28 @@ class FeedState {
 		};
 	}
 
-	#trailNode(card: FeedCard): TrailNode {
+	#trailNode(card: FeedCard, seen = false): TrailNode {
 		return {
 			id: card.id,
 			title: card.article.title,
 			relation: card.connection.relation,
 			fromTitle: card.connection.fromTitle,
 			// Surprises are detours: the next build fetches from the pre-surprise tip.
-			isDetour: card.connection.relation === 'surprise'
+			isDetour: card.connection.relation === 'surprise',
+			seen
 		};
+	}
+
+	/**
+	 * Mark a card as seen (it scrolled into view) so it joins the user-facing trail.
+	 * The full chain stays in `trail` for mechanics/rehydration; only the display
+	 * filters to seen nodes, so the trail reflects where you've actually been.
+	 */
+	markSeen(id: string): void {
+		const node = this.trail.find((n) => n.id === id);
+		if (!node || node.seen) return;
+		this.trail = this.trail.map((n) => (n.id === id ? { ...n, seen: true } : n));
+		if (browser) saveTrail(this.seedTitle ?? '', this.trail);
 	}
 }
 

@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { feed } from '$lib/feed/feedState.svelte';
 	import { reader } from '$lib/reader/readerState.svelte';
+	import { trailPanel } from '$lib/feed/trailPanel.svelte';
 	import { loadTrail } from '$lib/feed/trail';
 	import type { FeedCard } from '$lib/feed/types';
 	import { randomSeed } from '$lib/seeds';
@@ -20,6 +21,9 @@
 	// superseded run from starting the feed it was navigated away from.
 	$effect(() => {
 		const seed = seedParam;
+		// A new seed means a new feed — don't leave a stale article open beside it
+		// (the reader is a singleton and would otherwise orphan onto the new/errored page).
+		reader.close();
 		let cancelled = false;
 		(async () => {
 			const stored = browser ? loadTrail() : null;
@@ -93,6 +97,10 @@
 	let landedTimer: ReturnType<typeof setTimeout> | undefined;
 
 	async function goToCard(id: string) {
+		// Navigating to a card means you want to see that card — close the reader first
+		// (it would otherwise stay open over the destination) and let the layout settle
+		// back to one column before scrolling.
+		reader.close();
 		await tick();
 		document
 			.querySelector(`[data-card="${id}"]`)
@@ -131,10 +139,8 @@
 		}
 	}
 
-	let trailOpen = $state(false);
-
 	async function handleTrailSelect(id: string) {
-		trailOpen = false;
+		trailPanel.close();
 		await goToCard(id);
 	}
 
@@ -160,14 +166,14 @@
 </script>
 
 <svelte:head>
-	<title>{feed.seedTitle ? `${feed.seedTitle} · Tangent` : 'Tangent'}</title>
+	<title>{feed.displayTitle ? `${feed.displayTitle} · Tangent` : 'Tangent'}</title>
 </svelte:head>
 
-{#if trailOpen}
+{#if trailPanel.isOpen}
 	<TrailPanel
-		trail={feed.trail}
+		trail={feed.trail.filter((n) => n.seen)}
 		presentIds={new Set(feed.cards.map((c) => c.id))}
-		onClose={() => (trailOpen = false)}
+		onClose={() => trailPanel.close()}
 		onSelect={handleTrailSelect}
 	/>
 {/if}
@@ -176,7 +182,7 @@
 <div class={reader.isOpen ? 'lg:flex lg:items-start lg:gap-6' : ''}>
 	<!-- `contents` when closed so the feed keeps its exact single-column layout. -->
 	<div class={reader.isOpen ? 'lg:w-[42%] lg:shrink-0 lg:min-w-0' : 'contents'}>
-		<h1 class="sr-only">Tangent — {feed.seedTitle ?? 'a Wikipedia rabbit hole'}</h1>
+		<h1 class="sr-only">Tangent — {feed.displayTitle ?? 'a Wikipedia rabbit hole'}</h1>
 		{#if feed.status === 'error'}
 	<div class="flex flex-col items-center gap-4 py-20 text-center">
 		<p class="text-muted">{feed.error}</p>
@@ -194,32 +200,6 @@
 		<SkeletonCard />
 	</div>
 {:else}
-	{#if feed.trail.length > 1}
-		<!-- Sticky depth chip: replaces the scroll-away counter. Always visible, opens the trail panel. -->
-		<div class="sticky top-14 z-10 mb-5 flex justify-center">
-			<button
-				type="button"
-				onclick={() => (trailOpen = true)}
-				class="inline-flex items-center gap-1.5 rounded-full border border-hair bg-surface
-					px-3 py-1.5 text-xs font-medium text-muted transition-colors
-					hover:border-accent/50 hover:text-accent"
-			>
-				{feed.trail.length} deep
-				<svg
-					class="size-3"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					aria-hidden="true"
-				>
-					<path d="m6 9 6 6 6-6" />
-				</svg>
-			</button>
-		</div>
-	{/if}
-
 	<div class="space-y-5">
 		{#each feed.cards as card (card.id)}
 			{@const sourceId = sourceIdByCard.get(card.id)}
@@ -229,6 +209,7 @@
 					onBranch={handleBranch}
 					onRead={handleRead}
 					onNavigateToSource={sourceId ? () => goToCard(sourceId) : undefined}
+					onSeen={() => feed.markSeen(card.id)}
 				/>
 			</div>
 		{/each}

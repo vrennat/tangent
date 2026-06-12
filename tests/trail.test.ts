@@ -23,6 +23,7 @@ function node(overrides: Partial<TrailNode> = {}): TrailNode {
 		relation: 'link',
 		fromTitle: 'Rome',
 		isDetour: false,
+		seen: false,
 		...overrides
 	};
 }

@@ -7,13 +7,16 @@
 		card,
 		onBranch,
 		onRead,
-		onNavigateToSource
+		onNavigateToSource,
+		onSeen
 	}: {
 		card: FeedCard;
 		onBranch: (card: FeedCard) => Promise<void> | void;
 		onRead: (card: FeedCard) => void;
 		/** Jump to the card this one branched/linked/dove from, if it's in view. */
 		onNavigateToSource?: () => void;
+		/** Fired once when this card first scrolls into view — joins it to the trail. */
+		onSeen?: () => void;
 	} = $props();
 
 	const article = $derived(card.article);
@@ -50,6 +53,8 @@
 	// Dwell tracking: accumulate time this card is at least half on screen.
 	let el = $state<HTMLElement | null>(null);
 	let visibleSince = 0;
+	// Fire onSeen once — the first time this card is actually scrolled into view.
+	let hasSignaledSeen = false;
 
 	function flushDwell() {
 		if (!visibleSince) return;
@@ -65,6 +70,10 @@
 				for (const entry of entries) {
 					if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
 						if (!visibleSince) visibleSince = performance.now();
+						if (!hasSignaledSeen) {
+							hasSignaledSeen = true;
+							onSeen?.();
+						}
 					} else {
 						flushDwell();
 					}
@@ -103,7 +112,7 @@
 					alt=""
 					loading="lazy"
 					onerror={() => (imageFailed = true)}
-					class="float-right mb-2 ml-4 size-20 rounded-xl border border-hair object-cover object-top sm:size-24"
+					class="float-right mb-2 ml-4 mt-1 size-20 rounded-xl border border-hair object-cover object-top sm:size-24"
 				/>
 			{/if}
 

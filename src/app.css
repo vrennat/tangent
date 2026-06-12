@@ -339,3 +339,10 @@ body::before {
 .wiki-content a.wh-external[href*="/wiki/Help:"]::after {
 	content: none;
 }
+/* Figure/thumbnail images are wrapped in a link to their file page (mw-file-description),
+   which our rewiring tags as external — but a ↗ floating under every picture reads as a
+   stray glyph. Suppress the marker on any link that wraps an image. */
+.wiki-content a.wh-external:has(img)::after,
+.wiki-content a.mw-file-description::after {
+	content: none;
+}

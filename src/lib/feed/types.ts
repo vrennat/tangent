@@ -24,6 +24,12 @@ export interface TrailNode {
 	fromTitle: string;
 	/** True for surprise cards — the next build fetches from the pre-surprise tip instead. */
 	isDetour: boolean;
+	/**
+	 * True once the card has actually scrolled into view (or is the seed). The full chain
+	 * is kept for mechanics/rehydration, but the user-facing trail only shows seen nodes —
+	 * so the trail reflects where you've actually been, not everything prefetched.
+	 */
+	seen: boolean;
 }
 
 /**
