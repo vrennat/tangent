@@ -52,8 +52,9 @@
 
 <div
 	bind:this={el}
-	class="absolute right-0 top-full z-50 mt-2 w-full rounded-[var(--radius-card)] border border-hair
-		bg-surface shadow-card sm:w-72 focus:outline-none"
+	class="fixed inset-x-3 top-14 z-50 rounded-[var(--radius-card)] border border-hair
+		bg-surface shadow-card focus:outline-none
+		sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-72"
 	role="dialog"
 	aria-label="Your interests"
 	tabindex="-1"
