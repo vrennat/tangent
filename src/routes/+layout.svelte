@@ -50,6 +50,7 @@
 						class="icon-btn relative inline-flex items-center justify-center rounded-full p-1.5
 							text-muted transition-colors hover:bg-surface-2 hover:text-ink"
 					>
+						<!-- Trail: a winding path of waypoints — the route you've walked. -->
 						<svg
 							class="size-5"
 							viewBox="0 0 24 24"
@@ -60,10 +61,10 @@
 							stroke-linejoin="round"
 							aria-hidden="true"
 						>
-							<circle cx="5" cy="6" r="1.4" fill="currentColor" stroke="none" />
-							<circle cx="5" cy="12" r="1.4" fill="currentColor" stroke="none" />
-							<circle cx="5" cy="18" r="1.4" fill="currentColor" stroke="none" />
-							<path d="M10 6h9M10 12h9M10 18h9" />
+							<path d="M4 18 11 8 20 14" />
+							<circle cx="4" cy="18" r="1.7" fill="currentColor" stroke="none" />
+							<circle cx="11" cy="8" r="1.7" fill="currentColor" stroke="none" />
+							<circle cx="20" cy="14" r="1.7" fill="currentColor" stroke="none" />
 						</svg>
 						<span
 							class="absolute -right-0.5 -top-0.5 grid h-4 min-w-[1rem] place-items-center
@@ -83,6 +84,7 @@
 						class="icon-btn relative inline-flex items-center justify-center rounded-full p-1.5
 							text-muted transition-colors hover:bg-surface-2 hover:text-ink"
 					>
+						<!-- Interests: tuning sliders — the panel tunes your feed (no account). -->
 						<svg
 							class="size-5"
 							viewBox="0 0 24 24"
@@ -92,8 +94,10 @@
 							stroke-linecap="round"
 							aria-hidden="true"
 						>
-							<circle cx="12" cy="8" r="4" />
-							<path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+							<line x1="4" y1="8.5" x2="20" y2="8.5" />
+							<line x1="4" y1="15.5" x2="20" y2="15.5" />
+							<circle cx="9" cy="8.5" r="2.4" fill="currentColor" stroke="none" />
+							<circle cx="15" cy="15.5" r="2.4" fill="currentColor" stroke="none" />
 						</svg>
 						{#if hasProfile}
 							<!-- Dot signals that the feed is actively personalized. -->
@@ -137,4 +141,40 @@
 	>
 		{@render children()}
 	</main>
+
+	<!-- Attribution + legal small-print. Sits below the fold on the infinite feed
+	     (the in-feed entry point is in the interests popover); fully reachable on the
+	     start and about pages. -->
+	<footer class="border-t border-hair">
+		<div
+			class="mx-auto flex max-w-2xl flex-wrap items-center gap-x-5 gap-y-2 px-4 py-5 text-xs text-faint"
+		>
+			<p>
+				Text from
+				<a
+					href="https://en.wikipedia.org"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="underline decoration-hair-strong underline-offset-2 transition-colors hover:text-muted hover:decoration-muted"
+					>Wikipedia</a
+				>, licensed
+				<a
+					href="https://creativecommons.org/licenses/by-sa/4.0/"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="underline decoration-hair-strong underline-offset-2 transition-colors hover:text-muted hover:decoration-muted"
+					>CC BY-SA 4.0</a
+				>.
+			</p>
+			<nav class="ml-auto flex items-center gap-5">
+				<a href="/about" class="transition-colors hover:text-muted">About</a>
+				<a
+					href="https://github.com/vrennat/tangent"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="transition-colors hover:text-muted">Source</a
+				>
+			</nav>
+		</div>
+	</footer>
 </div>
