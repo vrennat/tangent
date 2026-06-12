@@ -141,16 +141,18 @@
 					? 'border-like/40 bg-like/10 text-like'
 					: 'border-hair text-muted hover:border-hair-strong hover:text-ink'}"
 			>
+				<!-- Favorite star — the geometric mark for like, filled when active. -->
 				<svg
 					class="size-4 transition-transform group-active:scale-110"
 					viewBox="0 0 24 24"
 					fill={liked ? 'currentColor' : 'none'}
 					stroke="currentColor"
 					stroke-width="2"
+					stroke-linejoin="round"
 					aria-hidden="true"
 				>
 					<path
-						d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"
+						d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
 					/>
 				</svg>
 				{liked ? 'Liked' : 'Like'}

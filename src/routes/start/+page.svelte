@@ -181,11 +181,9 @@
 				<button
 					type="button"
 					onclick={() => enter(seed.title)}
-					class="inline-flex items-center gap-1.5 rounded-full border border-hair
-						bg-surface/60 px-3 py-1.5 text-sm text-muted transition-all
-						hover:border-accent/50 hover:text-ink active:scale-95"
+					class="rounded-full border border-hair bg-surface/60 px-3 py-1.5 text-sm
+						text-muted transition-all hover:border-accent/50 hover:text-ink active:scale-95"
 				>
-					<span aria-hidden="true">{seed.emoji}</span>
 					{seed.title}
 				</button>
 			{/each}
