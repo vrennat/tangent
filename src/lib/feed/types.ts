@@ -65,3 +65,45 @@ export interface Selection {
 	/** True when the surprise epsilon fired and relevance was bypassed. */
 	surprised: boolean;
 }
+
+/**
+ * The persistent half of a user's profile: the interest vector. Small and syncable
+ * (a few KB), it lives on-device when logged out and in D1 when an account exists.
+ * Sent in the `/api/next` body so the server engine scores against it.
+ */
+export interface InterestPayload {
+	tokenWeights: Record<string, number>;
+	tokenDocFreq: Record<string, number>;
+}
+
+/**
+ * The ephemeral half: per-session state the client always tracks and sends. Kept
+ * separate from {@link InterestPayload} so accounts only ever sync the durable vector.
+ */
+export interface SessionPayload {
+	/** Titles already shown this session, to avoid loops. */
+	seenTitles: string[];
+	/** Tokens from the last few shown articles, for the variety penalty. */
+	recentTokens: string[];
+	/** When true, the engine never fires a surprise (deliberate steering: branch/dive). */
+	noSurprise?: boolean;
+}
+
+/** POST body for `/api/next` — the server reconstructs an {@link EngineContext} from this. */
+export interface NextRequest {
+	/** The chain tip to explore from (surprise detours are skipped client-side first). */
+	fromTitle: string;
+	/** `related` for "more like this" steering; omitted for the default explore feed. */
+	mode?: 'related';
+	interest: InterestPayload;
+	session: SessionPayload;
+}
+
+/** `/api/next` response — the fully-resolved next card plus how it was chosen. */
+export interface NextResponse {
+	article: Article | null;
+	surprised: boolean;
+	relation: Relation;
+	/** True when the candidate pool is exhausted (no eligible next step). */
+	exhausted?: boolean;
+}

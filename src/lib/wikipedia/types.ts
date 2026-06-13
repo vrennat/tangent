@@ -21,6 +21,13 @@ export interface Article {
 	/** Desktop Wikipedia URL for "Read full article". */
 	wikiUrl: string;
 	lang: string;
+	/**
+	 * Interest-vector tokens for this article (from `title + description`), computed
+	 * server-side with the single-source tokenizer. Clients NEVER tokenize — they do
+	 * pure numeric vector math keyed on these tokens — so the scoring brain can't drift
+	 * across a web (TS) and native (Swift) client. See `$lib/feed/tokens`.
+	 */
+	tokens: string[];
 }
 
 /**
