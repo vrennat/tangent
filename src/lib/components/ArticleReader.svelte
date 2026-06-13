@@ -1,42 +1,37 @@
 <script lang="ts">
-	import { tick, untrack } from 'svelte';
+	import { tick } from 'svelte';
 	import { reader } from '$lib/reader/readerState.svelte';
 	import { articleTitleFromHref } from '$lib/wikipedia/links';
-	import { ChevronLeft, X } from '@lucide/svelte';
+	import { X } from '@lucide/svelte';
 
 	let {
-		onFollow
+		onDive
 	}: {
-		/** Follow an in-article link: pushes a new reading level and feeds the profile. */
-		onFollow: (title: string) => void;
+		/** Dive into an in-article link: closes the reader and drops it as a fresh feed card. */
+		onDive: (title: string) => void;
 	} = $props();
 
 	let asideEl = $state<HTMLElement | null>(null);
-	let scrollEl = $state<HTMLElement | null>(null);
 	let contentEl = $state<HTMLElement | null>(null);
 	let articleHtml = $state<string | null>(null);
 	let htmlLoading = $state(false);
 	let htmlError = $state(false);
+	// Full-screen image view. Tapping a content image (figure/thumbnail/infobox) opens
+	// this; null when closed.
+	let lightbox = $state<{ src: string; caption: string; alt: string } | null>(null);
+	let closeImageEl = $state<HTMLElement | null>(null);
 
 	const current = $derived(reader.current);
 	const wikiUrl = $derived(
-		current ? `https://en.wikipedia.org/wiki/${encodeURIComponent(current.title.replace(/ /g, '_'))}` : ''
+		current ? `https://en.wikipedia.org/wiki/${encodeURIComponent(current.replace(/ /g, '_'))}` : ''
 	);
 
-	// Load the current level's HTML. Re-runs only when the shown level changes (open/
-	// push/back), not when we cache its html or track scroll. A level that was already
-	// visited has its html cached, so Back renders instantly with no refetch or flash.
+	// Fetch the shown article's HTML whenever the title changes (open, or a dive replacing
+	// it). The reader holds one article at a time, so there's no per-level cache to
+	// consult — a fresh open always loads fresh.
 	$effect(() => {
-		const entry = reader.current;
-		if (!entry) return;
-		const { title, html } = untrack(() => ({ title: entry.title, html: entry.html }));
-
-		if (html) {
-			articleHtml = html;
-			htmlLoading = false;
-			htmlError = false;
-			return;
-		}
+		const title = reader.current;
+		if (!title) return;
 
 		const controller = new AbortController();
 		articleHtml = null;
@@ -45,12 +40,8 @@
 		fetch(`/api/article?title=${encodeURIComponent(title)}`, { signal: controller.signal })
 			.then((res) => res.json())
 			.then((data: { html: string | null }) => {
-				if (data.html) {
-					articleHtml = data.html;
-					reader.cacheHtml(data.html);
-				} else {
-					htmlError = true;
-				}
+				if (data.html) articleHtml = data.html;
+				else htmlError = true;
 				htmlLoading = false;
 			})
 			.catch((err: unknown) => {
@@ -61,23 +52,44 @@
 		return () => controller.abort();
 	});
 
-	// Restore this level's scroll offset once its content is in the DOM (0 for a fresh
-	// level, the saved offset when walking back). Reads scrollTop untracked so ongoing
-	// scrolling doesn't retrigger and fight the user.
-	$effect(() => {
-		articleHtml;
-		const entry = reader.current;
-		if (!entry || !articleHtml || !scrollEl) return;
-		const top = untrack(() => entry.scrollTop);
-		tick().then(() => {
-			if (scrollEl) scrollEl.scrollTop = top;
-		});
-	});
+	// Real content imagery — figures, thumbnails, the infobox lead — opens the lightbox;
+	// inline icons, flags, and math glyphs (small, unframed) do not.
+	function isLightboxable(img: HTMLImageElement): boolean {
+		if (img.closest('figure, .thumb, .thumbinner, .quick-facts')) return true;
+		return img.clientWidth >= 100 && img.clientHeight >= 100;
+	}
 
-	// Click handling lives on the (stable) content container and classifies each link's
-	// raw href on click — so it keeps working across content swaps and cached Back
-	// renders, independent of the cosmetic rewrite below (which can lag a render).
-	//   - Wikipedia article link → follow in-app (left-click) or new-tab tangent (cmd/ctrl).
+	// Prefer the largest srcset candidate (typically 2x) over the original — Commons
+	// originals can be tens of MB, and the 2x thumb is plenty for a full-screen view.
+	function bestImageSrc(img: HTMLImageElement): string {
+		const srcset = img.getAttribute('srcset');
+		if (srcset) {
+			let bestUrl = '';
+			let bestScale = 0;
+			for (const part of srcset.split(',')) {
+				const [url, descriptor] = part.trim().split(/\s+/);
+				const scale = descriptor ? parseFloat(descriptor) : 1;
+				if (url && scale >= bestScale) {
+					bestScale = scale;
+					bestUrl = url;
+				}
+			}
+			if (bestUrl) return bestUrl;
+		}
+		return img.currentSrc || img.src;
+	}
+
+	function openLightbox(img: HTMLImageElement): void {
+		const figure = img.closest('figure, .thumb');
+		const caption = figure?.querySelector('figcaption, .thumbcaption')?.textContent?.trim() ?? '';
+		lightbox = { src: bestImageSrc(img), caption, alt: img.getAttribute('alt') || caption || 'Article image' };
+	}
+
+	// Click handling lives on the (stable) content container and classifies each target
+	// on click — so it keeps working across content swaps and cached renders, independent
+	// of the cosmetic rewrite below (which can lag a render).
+	//   - Content image → open full-screen (not its Commons file page).
+	//   - Wikipedia article link → dive in-app (left-click) or new-tab tangent (cmd/ctrl).
 	//   - In-page anchor (#section) → default scroll.
 	//   - Anything else (citations, File:/Category:, off-wiki) → open in a new tab.
 	$effect(() => {
@@ -86,6 +98,14 @@
 
 		const onClick = (event: MouseEvent) => {
 			if (event.defaultPrevented || event.button !== 0) return;
+
+			const img = (event.target as HTMLElement | null)?.closest?.('img');
+			if (img instanceof HTMLImageElement && isLightboxable(img)) {
+				event.preventDefault();
+				openLightbox(img);
+				return;
+			}
+
 			const anchor = (event.target as HTMLElement | null)?.closest?.('a');
 			if (!anchor) return;
 			const href = anchor.getAttribute('href') ?? '';
@@ -97,7 +117,7 @@
 				if (event.metaKey || event.ctrlKey) {
 					window.open(`/?seed=${encodeURIComponent(title)}`, '_blank', 'noopener');
 				} else {
-					onFollow(title);
+					onDive(title);
 				}
 			} else {
 				window.open(href, '_blank', 'noopener,noreferrer');
@@ -126,26 +146,49 @@
 					a.classList.add('wh-external');
 				}
 			}
+
+			// Give the lead a standfirst lift. The real lead is the first substantial
+			// paragraph (Parsoid buries it after shortdescription + hatnotes), so pick by
+			// text length rather than position; skip infobox/hatnote/figure paragraphs.
+			const lead = [...contentEl.querySelectorAll('p')].find(
+				(p) =>
+					!p.closest('.quick-facts, .hatnote, table, figure') &&
+					(p.textContent?.trim().length ?? 0) > 140
+			);
+			lead?.classList.add('wh-lead');
 		});
 	});
 
 	// On mobile the reader is a full-screen takeover, so move focus into it on open and
 	// restore it to the trigger on close — otherwise keyboard/SR users are left behind
-	// it. On desktop (lg+) it's a non-modal in-flow pane beside the feed, so focus stays.
+	// it. preventScroll on the restore: diving closes the reader and scrolls the feed to
+	// the new card (goToCard), and a plain focus() would yank the viewport back to the
+	// trigger near the top, fighting that scroll. On desktop (lg+) it's a non-modal
+	// in-flow pane beside the feed, so focus stays.
 	$effect(() => {
 		if (!asideEl) return;
 		if (window.matchMedia('(min-width: 1024px)').matches) return;
 		const trigger = document.activeElement as HTMLElement | null;
-		asideEl.focus();
-		return () => trigger?.focus?.();
+		asideEl.focus({ preventScroll: true });
+		return () => trigger?.focus?.({ preventScroll: true });
+	});
+
+	// The lightbox is a real modal (aria-modal): move focus to its close control on open
+	// so Escape/Enter and screen readers land inside it, and restore focus to whatever the
+	// reader had on close. preventScroll keeps the restore from jumping the article.
+	$effect(() => {
+		if (!lightbox) return;
+		const trigger = document.activeElement as HTMLElement | null;
+		closeImageEl?.focus({ preventScroll: true });
+		return () => trigger?.focus?.({ preventScroll: true });
 	});
 </script>
 
 <svelte:window
 	onkeydown={(e) => {
 		if (e.key !== 'Escape') return;
-		// A stack makes Escape mean "back" until you're at the root, then "close".
-		if (reader.canGoBack) reader.back();
+		// Escape closes the image view first (if open), then the reader itself.
+		if (lightbox) lightbox = null;
 		else reader.close();
 	}}
 />
@@ -170,19 +213,8 @@
 		class="z-10 flex items-center gap-2 border-b border-hair bg-surface px-4 sm:px-6
 			pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3 lg:pt-3"
 	>
-		{#if reader.canGoBack}
-			<button
-				type="button"
-				onclick={() => reader.back()}
-				aria-label="Back"
-				class="icon-btn -ml-1 inline-flex shrink-0 items-center justify-center rounded-full p-1.5
-					text-muted transition-colors hover:bg-surface-2 hover:text-ink"
-			>
-				<ChevronLeft class="size-5" aria-hidden="true" />
-			</button>
-		{/if}
 		<h2 class="font-display flex-1 text-xl leading-snug font-semibold tracking-tight text-ink">
-			{current?.title}
+			{current}
 		</h2>
 		<button
 			type="button"
@@ -197,8 +229,6 @@
 
 	<!-- Scrollable body. Bottom padding clears the home indicator on mobile. -->
 	<div
-		bind:this={scrollEl}
-		onscroll={() => reader.setScroll(scrollEl?.scrollTop ?? 0)}
 		class="flex-1 overflow-y-auto px-4 pt-6 sm:px-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
 	>
 		{#if htmlLoading}
@@ -230,3 +260,45 @@
 		{/if}
 	</div>
 </aside>
+
+{#if lightbox}
+	<!-- Full-screen image view above the reader. The backdrop and image are tap-to-dismiss
+	     (the image is pointer-transparent so a tap "through" it still hits the backdrop);
+	     Escape and the close control also dismiss. -->
+	<div
+		class="animate-fade fixed inset-0 z-50 flex flex-col items-center justify-center bg-void/85
+			backdrop-blur-md px-4 pt-[calc(1rem+env(safe-area-inset-top))]
+			pb-[calc(1rem+env(safe-area-inset-bottom))]"
+		role="dialog"
+		aria-modal="true"
+		aria-label="Image viewer"
+	>
+		<button
+			type="button"
+			class="absolute inset-0 cursor-zoom-out"
+			aria-label="Close image"
+			onclick={() => (lightbox = null)}
+		></button>
+		<button
+			bind:this={closeImageEl}
+			type="button"
+			onclick={() => (lightbox = null)}
+			aria-label="Close image"
+			class="icon-btn absolute right-3 top-[calc(0.75rem+env(safe-area-inset-top))] z-10 inline-flex
+				items-center justify-center rounded-full bg-surface/80 p-2 text-ink backdrop-blur
+				transition-colors hover:bg-surface-2"
+		>
+			<X class="size-5" aria-hidden="true" />
+		</button>
+		<img
+			src={lightbox.src}
+			alt={lightbox.alt}
+			class="pointer-events-none relative max-h-full max-w-full rounded-lg object-contain shadow-card"
+		/>
+		{#if lightbox.caption}
+			<p class="pointer-events-none relative mt-3 max-w-prose text-center text-sm text-faint">
+				{lightbox.caption}
+			</p>
+		{/if}
+	</div>
+{/if}

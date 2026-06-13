@@ -166,6 +166,33 @@ class FeedState {
 	}
 
 	/**
+	 * Dive into an in-article link: append the linked article as a fresh card at the
+	 * tail and steer the hole through it. Unlike branchFrom (which picks a *related*
+	 * page), this lands exactly on the title the reader tapped. `fromTitle` is the
+	 * article you were reading, so the new card's breadcrumb reads "Dove in from …".
+	 * A dive is an intentional read, so it feeds both signals: clickthrough (interest)
+	 * and seen (document-frequency). Returns the new card's id to scroll to, or null.
+	 */
+	async addDive(title: string, fromTitle: string): Promise<string | null> {
+		// Drain any inflight build before mutating the buffer.
+		await this.#tail;
+		this.#buffer = [];
+
+		const cardResult = await fetchCardApi(title);
+		if (!cardResult.ok) return null;
+
+		const built = this.#card(cardResult.data, { fromTitle, relation: 'dive' });
+		this.cards = [...this.cards, built];
+		this.trail = [...this.trail, this.#trailNode(built)];
+		if (browser) saveTrail(this.seedTitle ?? '', this.trail);
+		profile.recordClickthrough(cardResult.data);
+		profile.recordSeen(cardResult.data);
+		this.status = 'ready';
+		void this.#refill();
+		return built.id;
+	}
+
+	/**
 	 * Restore a previous session from sessionStorage.
 	 * Returns true if rehydration was performed (caller skips start()).
 	 * Returns false if no matching trail exists (caller should call start()).

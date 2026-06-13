@@ -9,7 +9,7 @@ struct LikedView: View {
 	let profile: EngagementProfile
 	var onClose: () -> Void
 
-	@State private var readArticle: Article?
+	@State private var reading: ReaderTitle?
 
 	var body: some View {
 		NavigationStack {
@@ -33,8 +33,10 @@ struct LikedView: View {
 			}
 		}
 		.tint(Theme.accent)
-		.fullScreenCover(item: $readArticle) { article in
-			ReaderContainer(rootTitle: article.title, profile: profile) { readArticle = nil }
+		.fullScreenCover(item: $reading) { item in
+			// No feed on this surface, so `onDive` is omitted — links navigate in place
+			// inside the reader's NavigationStack (back-swipe to return).
+			ReaderContainer(rootTitle: item.title, onClose: { reading = nil })
 		}
 	}
 
@@ -43,7 +45,7 @@ struct LikedView: View {
 			ForEach(profile.likedArticles) { article in
 				Button {
 					profile.recordClickthrough(article)
-					readArticle = article
+					reading = ReaderTitle(title: article.title)
 				} label: {
 					row(article)
 				}

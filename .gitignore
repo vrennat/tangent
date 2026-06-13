@@ -9,3 +9,6 @@ vite.config.ts.timestamp-*
 .DS_Store
 .wrangler
 .dev.vars
+
+# Worktree-local cache symlink (accidentally committed once)
+.cache

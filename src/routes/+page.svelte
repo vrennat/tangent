@@ -4,8 +4,6 @@
 	import { page } from '$app/state';
 	import { feed } from '$lib/feed/feedState.svelte';
 	import { reader } from '$lib/reader/readerState.svelte';
-	import { profile } from '$lib/engagement/profile.svelte';
-	import { fetchCard } from '$lib/feed/cardClient';
 	import { trailPanel } from '$lib/feed/trailPanel.svelte';
 	import { loadTrail } from '$lib/feed/trail';
 	import type { FeedCard } from '$lib/feed/types';
@@ -122,15 +120,16 @@
 		reader.open(card.article.title);
 	}
 
-	// Following an in-article link pushes a new reading level (a stack you can walk back
-	// out of) rather than re-rooting the feed. Push immediately so the reader swaps to a
-	// skeleton with no wait; fetch the card alongside only to feed the engagement profile
-	// (it needs the article's server tokens).
-	function handleFollow(title: string) {
-		reader.push(title);
-		void fetchCard(title).then((article) => {
-			if (article) profile.recordClickthrough(article);
-		});
+	// Diving into an in-article link closes the reader and drops the linked article as a
+	// fresh card at the tail of the feed (relation 'dive'), then scrolls you to it — so the
+	// feed itself stays the record of the rabbit hole rather than a hidden reader stack.
+	// `fromTitle` is the article you were reading, for the new card's "Dove in from …"
+	// breadcrumb. addDive feeds the engagement profile (clickthrough + seen) on its own.
+	async function handleDive(title: string) {
+		const fromTitle = reader.current ?? '';
+		reader.close();
+		const id = await feed.addDive(title, fromTitle);
+		if (id) await goToCard(id);
 	}
 
 	let jumpingRelated = $state(false);
@@ -267,6 +266,6 @@
 	</div>
 
 	{#if reader.isOpen}
-		<ArticleReader onFollow={handleFollow} />
+		<ArticleReader onDive={handleDive} />
 	{/if}
 </div>

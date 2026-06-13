@@ -16,6 +16,9 @@
 	--color-ink: #ece4d6;
 	--color-muted: #a89c8a;
 	--color-faint: #9b8f76;
+	/* Long-form reading body — brighter than muted UI text so a full article doesn't
+	   read gray, dimmer than ink so headings/links/bold still lead. */
+	--color-read: #cdbfa6;
 
 	/* Single ember accent + a sage discovery tone + a warm "like". No purple, no cyan. */
 	--color-accent: #e0a14e;
@@ -117,6 +120,19 @@ body::before {
 	animation: wh-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+@keyframes wh-fade {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+/* Lightbox backdrop fade-in (reduced-motion collapses it below). */
+.animate-fade {
+	animation: wh-fade 0.18s ease-out both;
+}
+
 @keyframes wh-shimmer {
 	0% {
 		background-position: -468px 0;
@@ -169,7 +185,7 @@ body::before {
  * dark theme and hide editorial chrome (edit links, navboxes, maintenance banners).
  */
 .wiki-content {
-	color: var(--color-muted);
+	color: var(--color-read);
 	/* Long-form reading is set in the serif — the lamplight-reading feel. */
 	font-family: var(--font-display);
 	font-size: 1.0625rem;
@@ -179,6 +195,15 @@ body::before {
 }
 .wiki-content p {
 	margin: 0 0 0.9em;
+}
+/* The lead reads as a standfirst — larger, set in ink — so the eye lands on the
+   article's opening rather than on the preamble of hatnotes above it. Tagged in JS
+   (the first substantial paragraph); see ArticleReader. */
+.wiki-content .wh-lead {
+	color: var(--color-ink);
+	font-size: 1.2rem;
+	line-height: 1.65;
+	margin-bottom: 1.1em;
 }
 /* Links rest at ink with a faint ember-hinted underline so a link-dense paragraph
    reads as calm prose — the full ember is saved for hover. */
@@ -193,7 +218,7 @@ body::before {
 /* Article links dive deeper in the feed; external links leave to the web. */
 .wiki-content a.wh-dive {
 	cursor: pointer;
-	text-decoration-color: color-mix(in oklab, var(--color-accent) 38%, transparent);
+	text-decoration-color: color-mix(in oklab, var(--color-accent) 28%, transparent);
 	text-decoration-line: underline;
 	text-decoration-thickness: 1px;
 	text-underline-offset: 2px;
@@ -279,9 +304,20 @@ body::before {
 	max-width: min(100%, 30rem);
 	text-align: center;
 }
-.wiki-content figure img {
+.wiki-content figure img,
+.wiki-content .thumbinner img {
 	display: block;
 	margin-inline: auto;
+	/* Framed plates: a hairline + soft shadow lift photos off the dark column. The
+	   zoom-in cursor signals tap-to-enlarge (ArticleReader opens a lightbox). */
+	border: 1px solid var(--color-hair);
+	box-shadow: var(--shadow-card);
+	cursor: zoom-in;
+	transition: border-color 0.15s ease;
+}
+.wiki-content figure img:hover,
+.wiki-content .thumbinner img:hover {
+	border-color: var(--color-hair-strong);
 }
 /* Neutralize Parsoid's float alignment so left/right-floated thumbs also center. */
 .wiki-content figure.mw-halign-left,
@@ -444,6 +480,7 @@ body::before {
 }
 .wiki-content .quick-facts img {
 	border-radius: 0.375rem;
+	cursor: zoom-in;
 }
 /* Center any infobox image that stays in the drawer — multi-image cells like a
    country's flag + coat of arms; the single lead image is hoisted out above the
@@ -471,6 +508,7 @@ body::before {
  * "Part of a series on…" link lists, and the [1][2] markers peppered through the prose).
  */
 .wiki-content .mw-editsection,
+.wiki-content .shortdescription,
 .wiki-content .noprint,
 .wiki-content .navbox,
 .wiki-content .navbox-styles,
