@@ -93,18 +93,55 @@ function wrapInfoboxes(html: string): string {
 		const end = matchingTableEnd(html, start);
 		if (end === -1) continue; // malformed — leave untouched
 
+		const { lead, table } = hoistInfoboxImage(html.slice(start, end));
 		out.push(html.slice(cursor, start));
-		out.push(
-			'<details class="quick-facts"><summary>Quick facts</summary>',
-			html.slice(start, end),
-			'</details>'
-		);
+		// The defining picture leads the read instead of hiding inside the disclosure.
+		if (lead) out.push(lead);
+		out.push('<details class="quick-facts"><summary>Quick facts</summary>', table, '</details>');
 		cursor = end;
 		OPEN.lastIndex = end;
 	}
 
 	out.push(html.slice(cursor));
 	return out.join('');
+}
+
+/**
+ * Lift an infobox's lead image (and its caption) out of the fact table into a
+ * standalone `<figure>` rendered above the collapsed disclosure, so the article's
+ * defining picture leads the read instead of hiding inside "Quick facts". The
+ * existing `figure` rules (app.css + ReaderCSS) center it on both platforms — no
+ * extra CSS needed — and the row is dropped from the table so it isn't duplicated.
+ *
+ * Anchors on Parsoid's `mw-default-size` thumbnail wrapper rather than a class
+ * like `.infobox-image`: standard infoboxes (people, places, products) and
+ * taxoboxes (`infobox biota`, which use a plain centered cell) both wrap their
+ * lead photo in it, while inline icons/flags do not — so this catches the
+ * designated lead across infobox shapes without grabbing decoration. Only a
+ * single-image row is hoisted; multi-image cells (a country's flag + coat of
+ * arms) and image-less infoboxes are left in place, keeping the transform
+ * lossless. Returns the figure markup (empty if nothing hoisted) and the table.
+ */
+function hoistInfoboxImage(table: string): { lead: string; table: string } {
+	const anchor = /class="mw-default-size"/i.exec(table);
+	if (!anchor) return { lead: '', table };
+
+	// The lead photo always precedes any nested sub-table, so the nearest <tr>
+	// around the anchor bounds a flat image row (no nested </tr> to confuse us).
+	const trStart = table.lastIndexOf('<tr', anchor.index);
+	const trClose = table.indexOf('</tr>', anchor.index);
+	if (trStart === -1 || trClose === -1) return { lead: '', table };
+	const rowEnd = trClose + '</tr>'.length;
+	const row = table.slice(trStart, rowEnd);
+
+	const imgs = row.match(/<img\b[^>]*>/gi) ?? [];
+	if (imgs.length !== 1) return { lead: '', table }; // multi-image cell — leave it in the drawer
+
+	const caption = /<div\b[^>]*\binfobox-caption\b[^>]*>([\s\S]*?)<\/div>/i.exec(row)?.[1];
+	const figcaption = caption ? `<figcaption>${caption}</figcaption>` : '';
+	const lead = `<figure class="infobox-lead">${imgs[0]}${figcaption}</figure>`;
+
+	return { lead, table: table.slice(0, trStart) + table.slice(rowEnd) };
 }
 
 /** Index just past the `</table>` that closes the `<table>` opening at `start`. -1 if unbalanced. */
