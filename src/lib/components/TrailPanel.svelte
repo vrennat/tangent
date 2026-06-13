@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { TrailNode } from '$lib/feed/types';
+	import Drawer from './Drawer.svelte';
 	import RelationIcon from './RelationIcon.svelte';
-	import { X } from '@lucide/svelte';
 
 	let {
 		trail,
@@ -15,78 +15,35 @@
 		onClose: () => void;
 		onSelect: (id: string) => void;
 	} = $props();
-
-	let dialogEl = $state<HTMLDialogElement | null>(null);
-
-	$effect(() => {
-		if (!dialogEl) return;
-		dialogEl.showModal();
-	});
-
-	function dismiss() {
-		dialogEl?.close();
-		onClose();
-	}
-
-	function select(id: string) {
-		onSelect(id);
-		dismiss();
-	}
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-<dialog
-	bind:this={dialogEl}
-	oncancel={(e) => {
-		e.preventDefault();
-		dismiss();
-	}}
-	onclick={(e) => {
-		// Close when clicking the backdrop (outside the panel content).
-		if (e.target === dialogEl) dismiss();
-	}}
-	class="fixed inset-0 z-40 m-0 h-full w-full max-h-none max-w-none border-none
-		bg-transparent p-0 backdrop:bg-black/60"
->
-	<!-- Panel slides in from the right -->
-	<div
-		class="ml-auto flex h-full w-80 max-w-[85vw] flex-col border-l border-hair bg-surface"
-		role="document"
-	>
-		<!-- Header -->
-		<div class="flex items-center justify-between border-b border-hair px-4 py-3">
-			<div class="flex items-center gap-2">
-				<h2 class="font-display text-sm font-semibold text-ink">Your trail</h2>
-				<span class="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-faint"
-					>{trail.length}</span
-				>
-			</div>
-			<button
-				type="button"
-				onclick={dismiss}
-				aria-label="Close trail"
-				class="icon-btn inline-flex items-center justify-center rounded-full p-1.5
-					text-muted transition-colors hover:bg-surface-2 hover:text-ink"
-			>
-				<X class="size-4" aria-hidden="true" />
-			</button>
-		</div>
-
-		<!-- Trail list -->
-		<div class="flex-1 overflow-y-auto py-2">
+<Drawer title="Your trail" badge={trail.length} closeLabel="Close trail" {onClose}>
+	{#snippet children(close)}
+		<div class="py-2">
 			{#each trail as node (node.id)}
 				<!-- Nodes dropped during rehydration have no card to scroll to — shown but inert. -->
 				<button
 					type="button"
 					disabled={!presentIds.has(node.id)}
-					onclick={() => select(node.id)}
+					onclick={() => {
+						onSelect(node.id);
+						close();
+					}}
 					class="flex w-full items-start gap-2 px-4 py-2.5 text-left
 						transition-colors hover:bg-surface-2
 						disabled:cursor-default disabled:opacity-35 disabled:hover:bg-transparent
 						{node.isDetour ? 'ml-4 border-l-2 border-dashed border-hair pl-3 opacity-60' : ''}"
 				>
 					<!-- Relation icon (shared geometric set) -->
-					<span class="mt-0.5 shrink-0 {node.relation === 'surprise' ? 'text-spark' : node.relation === 'seed' ? 'text-accent' : node.relation === 'dive' ? 'text-accent' : 'text-muted'}">
+					<span
+						class="mt-0.5 shrink-0 {node.relation === 'surprise'
+							? 'text-spark'
+							: node.relation === 'seed'
+								? 'text-accent'
+								: node.relation === 'dive'
+									? 'text-accent'
+									: 'text-muted'}"
+					>
 						<RelationIcon relation={node.relation} />
 					</span>
 
@@ -94,5 +51,5 @@
 				</button>
 			{/each}
 		</div>
-	</div>
-</dialog>
+	{/snippet}
+</Drawer>

@@ -1,9 +1,9 @@
 <script lang="ts">
 	import '../app.css';
 	import { page } from '$app/state';
-	import { Waypoints, SlidersHorizontal, Plus } from '@lucide/svelte';
 	import BrandMark from '$lib/components/BrandMark.svelte';
-	import ProfilePopover from '$lib/components/ProfilePopover.svelte';
+	import ProfilePanel from '$lib/components/ProfilePanel.svelte';
+	import { Waypoints, SlidersHorizontal, Plus } from '@lucide/svelte';
 	import { profile } from '$lib/engagement/profile.svelte';
 	import { reader } from '$lib/reader/readerState.svelte';
 	import { feed } from '$lib/feed/feedState.svelte';
@@ -36,7 +36,12 @@
 			class="mx-auto flex items-center justify-between px-4 py-3
 				transition-[max-width] duration-200 ease-out {shellWidth}"
 		>
-			<a href="/" class="transition-opacity hover:opacity-80" aria-label="Tangent home">
+			<!-- -m/p pair grows the tap target past 44px without shifting the visual position. -->
+			<a
+				href="/"
+				class="-m-2.5 inline-flex items-center p-2.5 transition-opacity hover:opacity-80"
+				aria-label="Tangent home"
+			>
 				<BrandMark />
 			</a>
 
@@ -48,10 +53,11 @@
 						type="button"
 						onclick={() => trailPanel.toggle()}
 						aria-label="Your trail, {seenCount} articles"
+						aria-haspopup="dialog"
 						class="icon-btn relative inline-flex items-center justify-center rounded-full p-1.5
 							text-muted transition-colors hover:bg-surface-2 hover:text-ink"
 					>
-						<!-- Trail: connected waypoints — the path of articles you've visited. -->
+						<!-- Trail: a winding path of waypoints — the route you've walked. -->
 						<Waypoints class="size-5" aria-hidden="true" />
 						<span
 							class="absolute -right-0.5 -top-0.5 grid h-4 min-w-[1rem] place-items-center
@@ -62,30 +68,29 @@
 				{/if}
 
 				<!-- Profile affordance: icon button with accent dot when interests are active. -->
-				<div class="relative">
-					<button
-						type="button"
-						onclick={() => (profileOpen = !profileOpen)}
-						aria-label="Your interests"
-						aria-expanded={profileOpen}
-						class="icon-btn relative inline-flex items-center justify-center rounded-full p-1.5
-							text-muted transition-colors hover:bg-surface-2 hover:text-ink"
-					>
-						<!-- Interests: tuning sliders — the panel tunes your feed (no account). -->
-						<SlidersHorizontal class="size-5" aria-hidden="true" />
-						{#if hasProfile}
-							<!-- Dot signals that the feed is actively personalized. -->
-							<span
-								class="absolute right-1 top-1 size-2 rounded-full bg-accent"
-								aria-hidden="true"
-							></span>
-						{/if}
-					</button>
-
-					{#if profileOpen}
-						<ProfilePopover onClose={() => (profileOpen = false)} />
+				<button
+					type="button"
+					onclick={() => (profileOpen = !profileOpen)}
+					aria-label="Your interests"
+					aria-expanded={profileOpen}
+					aria-haspopup="dialog"
+					class="icon-btn relative inline-flex items-center justify-center rounded-full p-1.5
+						text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+				>
+					<!-- Interests: tuning sliders — the panel tunes your feed (no account). -->
+					<SlidersHorizontal class="size-5" aria-hidden="true" />
+					{#if hasProfile}
+						<!-- Dot signals that the feed is actively personalized. -->
+						<span
+							class="absolute right-1 top-1 size-2 rounded-full bg-accent"
+							aria-hidden="true"
+						></span>
 					{/if}
-				</div>
+				</button>
+
+				{#if profileOpen}
+					<ProfilePanel onClose={() => (profileOpen = false)} />
+				{/if}
 
 				<a
 					href="/start"
@@ -130,13 +135,17 @@
 					>CC BY-SA 4.0</a
 				>.
 			</p>
+			<!-- -m/p pairs give these standalone links a 44px touch zone without growing the row. -->
 			<nav class="ml-auto flex items-center gap-5">
-				<a href="/about" class="transition-colors hover:text-muted">About</a>
+				<a
+					href="/about"
+					class="-mx-1.5 -my-3.5 px-1.5 py-3.5 transition-colors hover:text-muted">About</a
+				>
 				<a
 					href="https://github.com/vrennat/tangent"
 					target="_blank"
 					rel="noopener noreferrer"
-					class="transition-colors hover:text-muted">Source</a
+					class="-mx-1.5 -my-3.5 px-1.5 py-3.5 transition-colors hover:text-muted">Source</a
 				>
 			</nav>
 		</div>

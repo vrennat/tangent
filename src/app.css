@@ -86,6 +86,12 @@ body::before {
 		min-block-size: 44px;
 		min-inline-size: 44px;
 	}
+	/* Inline text buttons skip the floor above to preserve line flow; since they're
+	   display:inline, block padding grows the hit area to ~44px without moving the
+	   line. Invisible — they have no background or border. */
+	button.inline {
+		padding-block: 14px;
+	}
 }
 
 /* Hide scrollbars on the feed for a cleaner immersive feel, keep scroll working. */
