@@ -54,7 +54,22 @@ struct FeedView: View {
 		.task { if store.cards.isEmpty { await store.start(Seeds.cold().title) } }
 		.sensoryFeedback(.selection, trigger: currentID)
 		.fullScreenCover(item: $readArticle) { article in
-			ReaderContainer(rootTitle: article.title, profile: profile) { readArticle = nil }
+			ReaderContainer(
+				rootTitle: article.title,
+				onDive: { title in
+					// Card-based dive: close the reader, drop the linked article as a fresh
+					// card at the tail, then page to it — the feed stays the rabbit hole.
+					readArticle = nil
+					Task {
+						if let id = await store.dive(into: title, from: article.title) {
+							// Let the new page materialize before snapping the pager to it.
+							try? await Task.sleep(for: .milliseconds(50))
+							withAnimation { currentID = id }
+						}
+					}
+				},
+				onClose: { readArticle = nil }
+			)
 		}
 		.sheet(isPresented: $showLiked) {
 			LikedView(profile: profile) { showLiked = false }

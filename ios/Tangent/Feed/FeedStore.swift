@@ -56,6 +56,27 @@ final class FeedStore {
 		Task { await ensureAhead(from: index) }
 	}
 
+	/// Dive into an in-article link: append the linked article as a fresh card at the tail
+	/// (relation `.dive`) and steer the hole through it — mirrors the web reader, where
+	/// following a link drops a card into the feed rather than deepening a reader stack.
+	/// `from` is the article being read, for the new card's "Dove in from …" breadcrumb.
+	/// A dive is an intentional read, so it feeds both signals (clickthrough + seen).
+	/// Returns the new card's id to scroll to, or nil if the article couldn't be fetched.
+	func dive(into title: String, from: String) async -> String? {
+		do {
+			guard let article = try await api.card(title: title) else { return nil }
+			let card = makeCard(article, from: from, relation: .dive)
+			cards.append(card)
+			profile.recordClickthrough(article)
+			profile.recordSeen(article)
+			status = .ready
+			await ensureAhead(from: cards.count - 1)
+			return card.id
+		} catch {
+			return nil
+		}
+	}
+
 	/// Ensure at least `lookahead` cards exist beyond `index`, fetching as needed.
 	func ensureAhead(from index: Int) async {
 		guard !building else { return }

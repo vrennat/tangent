@@ -1,12 +1,14 @@
 import SwiftUI
 
 /// One article in the reader: fetches its sanitized HTML and renders it, with loading
-/// and error states. Link taps are forwarded up to the container (follow in-app /
-/// open externally).
+/// and error states. Taps are forwarded up to the container: an article link dives into
+/// a new feed card (`onDive`), other links open externally (`onExternal`), and a content
+/// image opens the full-screen viewer (`onImage`).
 struct ArticleReaderView: View {
 	let title: String
-	var onFollow: (String) -> Void
+	var onDive: (String) -> Void
 	var onExternal: (URL) -> Void
+	var onImage: (LightboxImage) -> Void
 
 	private enum Phase: Equatable { case loading, loaded(String), failed }
 	@State private var phase: Phase = .loading
@@ -19,7 +21,7 @@ struct ArticleReaderView: View {
 			case .loading:
 				ProgressView().tint(Theme.accent)
 			case .loaded(let html):
-				ReaderWebView(title: title, bodyHTML: html, onFollow: onFollow, onExternal: onExternal)
+				ReaderWebView(title: title, bodyHTML: html, onDive: onDive, onExternal: onExternal, onImage: onImage)
 					.ignoresSafeArea(edges: .bottom)
 			case .failed:
 				VStack(spacing: 14) {

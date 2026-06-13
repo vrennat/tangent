@@ -11,7 +11,7 @@ enum Relation: String, Codable, Hashable {
 		case .link: return "Linked from \(from)"
 		case .related: return "More like \(from)"
 		case .surprise: return "Tangent from \(from)"
-		case .dive: return "Dove from \(from)"
+		case .dive: return "Dove in from \(from)"
 		}
 	}
 }

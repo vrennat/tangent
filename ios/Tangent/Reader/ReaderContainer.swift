@@ -1,49 +1,42 @@
 import SwiftUI
 
-/// The in-app reader surface. Hosts a navigation stack of article readers: tapping a
-/// Wikipedia link inside an article pushes a new reader (native back-swipe to unwind),
-/// so you can follow a reading rabbit hole without losing your place in the feed.
-/// Non-article links open externally in a Safari sheet.
+/// The in-app reader surface: one article at a time. Tapping a Wikipedia link inside an
+/// article dives into a new feed card (`onDive`) rather than deepening a reader stack —
+/// so the feed itself stays the record of the rabbit hole, matching the web reader. Other
+/// links open in a Safari sheet; content images open the full-screen image viewer.
+///
+/// (A single-level NavigationStack still wraps the reader to carry the title bar + Done.)
 struct ReaderContainer: View {
 	let rootTitle: String
-	let profile: EngagementProfile
+	/// Dive into an in-article link — the feed closes the reader and drops the card.
+	var onDive: (String) -> Void
 	var onClose: () -> Void
 
-	@State private var path: [String] = []
 	@State private var external: ExternalLink?
+	@State private var lightboxImage: LightboxImage?
 
 	var body: some View {
-		NavigationStack(path: $path) {
-			reader(rootTitle)
-				.navigationDestination(for: String.self) { reader($0) }
+		NavigationStack {
+			ArticleReaderView(
+				title: rootTitle,
+				onDive: onDive,
+				onExternal: { external = ExternalLink(url: $0) },
+				onImage: { lightboxImage = $0 }
+			)
+			.toolbarBackground(Theme.surface, for: .navigationBar)
+			.toolbarBackground(.visible, for: .navigationBar)
+			.toolbar {
+				ToolbarItem(placement: .topBarTrailing) {
+					Button("Done", action: onClose).foregroundStyle(Theme.accent)
+				}
+			}
 		}
 		.tint(Theme.accent)
 		.sheet(item: $external) { link in
 			SafariView(url: link.url).ignoresSafeArea()
 		}
-	}
-
-	private func reader(_ title: String) -> some View {
-		ArticleReaderView(
-			title: title,
-			onFollow: { followed in
-				// Push immediately so navigation never waits; fetch the card alongside
-				// only to feed the engagement profile (it needs the server tokens).
-				path.append(followed)
-				Task {
-					if let article = try? await APIClient.shared.card(title: followed) {
-						profile.recordClickthrough(article)
-					}
-				}
-			},
-			onExternal: { external = ExternalLink(url: $0) }
-		)
-		.toolbarBackground(Theme.surface, for: .navigationBar)
-		.toolbarBackground(.visible, for: .navigationBar)
-		.toolbar {
-			ToolbarItem(placement: .topBarTrailing) {
-				Button("Done", action: onClose).foregroundStyle(Theme.accent)
-			}
+		.fullScreenCover(item: $lightboxImage) { image in
+			ImageViewer(image: image) { lightboxImage = nil }
 		}
 	}
 }
@@ -52,4 +45,11 @@ struct ReaderContainer: View {
 private struct ExternalLink: Identifiable {
 	let url: URL
 	var id: String { url.absoluteString }
+}
+
+/// Identifiable title wrapper so a reader can be driven by `.fullScreenCover(item:)` —
+/// used where the reader is opened by title rather than a resolved card (e.g. LikedView).
+struct ReaderTitle: Identifiable {
+	let title: String
+	var id: String { title }
 }

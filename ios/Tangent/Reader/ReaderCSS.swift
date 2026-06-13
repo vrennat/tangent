@@ -13,6 +13,7 @@ enum ReaderCSS {
 	:root {
 	  --void: #15110c; --surface: #1f1a13; --surface2: #2a2218;
 	  --ink: #ece4d6; --muted: #a89c8a; --faint: #9b8f76; --accent: #e0a14e;
+	  --read: #cdbfa6; /* brighter long-form body so an article doesn't read gray */
 	  --hair: rgba(236,228,214,0.10); --hair-strong: rgba(236,228,214,0.18);
 	  --serif: ui-serif, "New York", Georgia, serif;
 	  --sans: -apple-system, system-ui, sans-serif;
@@ -20,7 +21,7 @@ enum ReaderCSS {
 	* { -webkit-text-size-adjust: 100%; }
 	html, body { margin: 0; background: var(--void); }
 	body {
-	  color: var(--muted);
+	  color: var(--read);
 	  font-family: var(--serif);
 	  font-size: 1.0625rem;
 	  line-height: 1.75;
@@ -30,11 +31,14 @@ enum ReaderCSS {
 	  -webkit-font-smoothing: antialiased;
 	}
 	p { margin: 0 0 0.9em; }
+	/* The lead reads as a standfirst — larger, set in ink — so the eye lands on the
+	   article's opening rather than the hatnotes above it. Tagged in ReaderJS. */
+	.wh-lead { color: var(--ink); font-size: 1.2rem; line-height: 1.65; margin-bottom: 1.1em; }
 	/* Links rest at ink with a faint ember underline; the article-vs-external distinction
 	   is enforced by the navigation delegate (tap = follow in-app or open externally). */
 	a {
 	  color: var(--ink);
-	  text-decoration-color: color-mix(in oklab, var(--accent) 38%, transparent);
+	  text-decoration-color: color-mix(in oklab, var(--accent) 28%, transparent);
 	  text-decoration-line: underline;
 	  text-decoration-thickness: 1px;
 	  text-underline-offset: 2px;
@@ -54,6 +58,12 @@ enum ReaderCSS {
 	video { display: block; margin-inline: auto; }
 	figure { margin: 1.5em auto; max-width: min(100%, 30rem); text-align: center; }
 	figure img, figure video { display: block; margin-inline: auto; }
+	/* Framed plates: a hairline + soft shadow lift photos off the dark column. (Tapping a
+	   figure opens the full-screen image viewer — see ReaderJS.) */
+	figure img, .thumbinner img {
+	  border: 1px solid var(--hair);
+	  box-shadow: 0 10px 30px -18px rgba(0,0,0,0.85);
+	}
 	figure.mw-halign-left, figure.mw-halign-right,
 	.mw-halign-left, .mw-halign-right { float: none; margin-inline: auto; }
 	.thumb { float: none; margin: 1.5em auto; max-width: 100%; text-align: center; }
@@ -102,9 +112,9 @@ enum ReaderCSS {
 	/* Hide Wikipedia chrome so the reader opens on the article, not a Wikipedia mirror:
 	   editorial furniture plus the sidebar/navbox/citation noise that linearizes into a
 	   wall of navigation in our single dark column. Mirrors the web reader's hide list. */
-	.mw-editsection, .noprint, .navbox, .navbox-styles, .metadata, .ambox, .mbox-image,
-	.mw-empty-elt, .mw-jump-link, .sidebar, .vertical-navbox, .IPA, .ext-phonos,
-	.mw-tmh-player, sup.reference, .reflist, ol.references, style, link {
+	.mw-editsection, .shortdescription, .noprint, .navbox, .navbox-styles, .metadata,
+	.ambox, .mbox-image, .mw-empty-elt, .mw-jump-link, .sidebar, .vertical-navbox, .IPA,
+	.ext-phonos, .mw-tmh-player, sup.reference, .reflist, ol.references, style, link {
 	  display: none !important;
 	}
 	"""

@@ -9,7 +9,7 @@ struct LikedView: View {
 	let profile: EngagementProfile
 	var onClose: () -> Void
 
-	@State private var readArticle: Article?
+	@State private var reading: ReaderTitle?
 
 	var body: some View {
 		NavigationStack {
@@ -33,8 +33,21 @@ struct LikedView: View {
 			}
 		}
 		.tint(Theme.accent)
-		.fullScreenCover(item: $readArticle) { article in
-			ReaderContainer(rootTitle: article.title, profile: profile) { readArticle = nil }
+		.fullScreenCover(item: $reading) { item in
+			ReaderContainer(
+				rootTitle: item.title,
+				onDive: { title in
+					// No feed on this surface — a dive navigates the reader to the linked
+					// article (re-presents), and records the read like a clickthrough.
+					reading = ReaderTitle(title: title)
+					Task {
+						if let article = try? await APIClient.shared.card(title: title) {
+							profile.recordClickthrough(article)
+						}
+					}
+				},
+				onClose: { reading = nil }
+			)
 		}
 	}
 
@@ -43,7 +56,7 @@ struct LikedView: View {
 			ForEach(profile.likedArticles) { article in
 				Button {
 					profile.recordClickthrough(article)
-					readArticle = article
+					reading = ReaderTitle(title: article.title)
 				} label: {
 					row(article)
 				}
