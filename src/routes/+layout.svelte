@@ -84,14 +84,18 @@
 					<ProfilePanel onClose={() => (profileOpen = false)} />
 				{/if}
 
+				<!-- Below ~320px the wordmark + this pill overflow the bar, which widens the
+				     document and makes the feed column look detached from the viewport. Collapse
+				     the label to an icon-only button there; sr-only keeps the accessible name. -->
 				<a
 					href="/start"
 					data-cta
+					aria-label="New tangent"
 					class="inline-flex items-center gap-1.5 rounded-full border border-hair px-3 py-1.5
 						text-sm font-medium text-muted transition-colors hover:border-accent/50 hover:text-accent"
 				>
 					<Plus class="size-4" aria-hidden="true" />
-					New tangent
+					<span class="hidden min-[20rem]:inline">New tangent</span>
 				</a>
 			</div>
 		</div>
