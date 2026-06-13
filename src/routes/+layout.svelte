@@ -2,7 +2,7 @@
 	import '../app.css';
 	import { page } from '$app/state';
 	import BrandMark from '$lib/components/BrandMark.svelte';
-	import ProfilePopover from '$lib/components/ProfilePopover.svelte';
+	import ProfilePanel from '$lib/components/ProfilePanel.svelte';
 	import { profile } from '$lib/engagement/profile.svelte';
 	import { reader } from '$lib/reader/readerState.svelte';
 	import { feed } from '$lib/feed/feedState.svelte';
@@ -35,7 +35,12 @@
 			class="mx-auto flex items-center justify-between px-4 py-3
 				transition-[max-width] duration-200 ease-out {shellWidth}"
 		>
-			<a href="/" class="transition-opacity hover:opacity-80" aria-label="Tangent home">
+			<!-- -m/p pair grows the tap target past 44px without shifting the visual position. -->
+			<a
+				href="/"
+				class="-m-2.5 inline-flex items-center p-2.5 transition-opacity hover:opacity-80"
+				aria-label="Tangent home"
+			>
 				<BrandMark />
 			</a>
 
@@ -47,6 +52,7 @@
 						type="button"
 						onclick={() => trailPanel.toggle()}
 						aria-label="Your trail, {seenCount} articles"
+						aria-haspopup="dialog"
 						class="icon-btn relative inline-flex items-center justify-center rounded-full p-1.5
 							text-muted transition-colors hover:bg-surface-2 hover:text-ink"
 					>
@@ -75,43 +81,42 @@
 				{/if}
 
 				<!-- Profile affordance: icon button with accent dot when interests are active. -->
-				<div class="relative">
-					<button
-						type="button"
-						onclick={() => (profileOpen = !profileOpen)}
-						aria-label="Your interests"
-						aria-expanded={profileOpen}
-						class="icon-btn relative inline-flex items-center justify-center rounded-full p-1.5
-							text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+				<button
+					type="button"
+					onclick={() => (profileOpen = !profileOpen)}
+					aria-label="Your interests"
+					aria-expanded={profileOpen}
+					aria-haspopup="dialog"
+					class="icon-btn relative inline-flex items-center justify-center rounded-full p-1.5
+						text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+				>
+					<!-- Interests: tuning sliders — the panel tunes your feed (no account). -->
+					<svg
+						class="size-5"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						aria-hidden="true"
 					>
-						<!-- Interests: tuning sliders — the panel tunes your feed (no account). -->
-						<svg
-							class="size-5"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
+						<line x1="4" y1="8.5" x2="20" y2="8.5" />
+						<line x1="4" y1="15.5" x2="20" y2="15.5" />
+						<circle cx="9" cy="8.5" r="2.4" fill="currentColor" stroke="none" />
+						<circle cx="15" cy="15.5" r="2.4" fill="currentColor" stroke="none" />
+					</svg>
+					{#if hasProfile}
+						<!-- Dot signals that the feed is actively personalized. -->
+						<span
+							class="absolute right-1 top-1 size-2 rounded-full bg-accent"
 							aria-hidden="true"
-						>
-							<line x1="4" y1="8.5" x2="20" y2="8.5" />
-							<line x1="4" y1="15.5" x2="20" y2="15.5" />
-							<circle cx="9" cy="8.5" r="2.4" fill="currentColor" stroke="none" />
-							<circle cx="15" cy="15.5" r="2.4" fill="currentColor" stroke="none" />
-						</svg>
-						{#if hasProfile}
-							<!-- Dot signals that the feed is actively personalized. -->
-							<span
-								class="absolute right-1 top-1 size-2 rounded-full bg-accent"
-								aria-hidden="true"
-							></span>
-						{/if}
-					</button>
-
-					{#if profileOpen}
-						<ProfilePopover onClose={() => (profileOpen = false)} />
+						></span>
 					{/if}
-				</div>
+				</button>
+
+				{#if profileOpen}
+					<ProfilePanel onClose={() => (profileOpen = false)} />
+				{/if}
 
 				<a
 					href="/start"
@@ -166,13 +171,17 @@
 					>CC BY-SA 4.0</a
 				>.
 			</p>
+			<!-- -m/p pairs give these standalone links a 44px touch zone without growing the row. -->
 			<nav class="ml-auto flex items-center gap-5">
-				<a href="/about" class="transition-colors hover:text-muted">About</a>
+				<a
+					href="/about"
+					class="-mx-1.5 -my-3.5 px-1.5 py-3.5 transition-colors hover:text-muted">About</a
+				>
 				<a
 					href="https://github.com/vrennat/tangent"
 					target="_blank"
 					rel="noopener noreferrer"
-					class="transition-colors hover:text-muted">Source</a
+					class="-mx-1.5 -my-3.5 px-1.5 py-3.5 transition-colors hover:text-muted">Source</a
 				>
 			</nav>
 		</div>
