@@ -1,0 +1,5 @@
+# Generated artifacts — the candidate cache and run outputs are large and stale-able.
+cache.json
+results-*.json
+run-*.log
+report-*.md
