@@ -23,6 +23,10 @@ export function articleTitleFromHref(href: string): string | null {
 
 		const title = decodeURIComponent(match[1]).replace(/_/g, ' ').trim();
 		if (!title || NON_ARTICLE_NAMESPACE.test(title)) return null;
+		// Citation identifier stubs — "Doi (identifier)", "Hdl (identifier)", "ISSN
+		// (identifier)" — are reference plumbing that links into article HTML, never a
+		// rabbit-hole destination. The "(identifier)" suffix is unique to them.
+		if (/\(identifier\)$/i.test(title)) return null;
 
 		return title;
 	} catch {

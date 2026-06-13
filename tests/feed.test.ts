@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Candidate } from '../src/lib/wikipedia/types';
 import type { EngineContext } from '../src/lib/feed/types';
-import { scoreCandidate } from '../src/lib/feed/score';
+import { scoreCandidate, specificity } from '../src/lib/feed/score';
 import { selectNext } from '../src/lib/feed/select';
 import { FEED } from '../src/lib/feed/config';
 
@@ -208,6 +208,82 @@ describe('selectNext', () => {
 					expect(result.candidate.title).not.toBe(political.title);
 				}
 			}
+		});
+	});
+});
+
+describe('specificity', () => {
+	describe('rewards concrete, named, dated articles', () => {
+		it('boosts a description carrying a year (a life, a dated event)', () => {
+			expect(specificity(candidate({ title: 'Foo', description: 'Ottoman conquest in 1453' })))
+				.toBeGreaterThan(0);
+		});
+
+		it('boosts a multi-word proper-noun title', () => {
+			expect(specificity(candidate({ title: 'New Orleans', description: 'city' })))
+				.toBeGreaterThan(0);
+		});
+	});
+
+	describe('penalizes generic abstractions and enumerations', () => {
+		it('penalizes a bare definitional category (the abstraction sinks)', () => {
+			expect(specificity(candidate({ title: 'Order', description: 'Taxonomic rank between class and family' })))
+				.toBeLessThan(0);
+		});
+
+		it('penalizes the philosophical-bedrock sinks a position-only feed collapses into', () => {
+			expect(specificity(candidate({ title: 'Entity', description: 'Something that exists' })))
+				.toBeLessThan(0);
+		});
+
+		it('penalizes list / timeline titles', () => {
+			expect(specificity(candidate({ title: 'List of coffee drinks', description: 'beverages' })))
+				.toBeLessThan(0);
+			expect(specificity(candidate({ title: 'Timeline of Italian history', description: '' })))
+				.toBeLessThan(0);
+		});
+	});
+
+	describe('stays neutral on good laterals (left to a future graph layer)', () => {
+		it('does not penalize a real taxonomic relative described as "Class of …"', () => {
+			expect(specificity(candidate({ title: 'Cephalopod', description: 'Class of mollusks' })))
+				.toBe(0);
+		});
+	});
+});
+
+describe('scoreCandidate — specificity', () => {
+	it('ranks a vivid dated article above an abstraction sink at the same position', () => {
+		const ctx = context();
+		const vivid = scoreCandidate(
+			candidate({ title: 'Byzantine Empire', description: 'Continuation of the Roman Empire (330–1453)' }),
+			ctx
+		);
+		const sink = scoreCandidate(candidate({ title: 'Entity', description: 'Something that exists' }), ctx);
+		expect(vivid).toBeGreaterThan(sink);
+	});
+
+	describe('tapers under expressed interest', () => {
+		// Two candidates with identical tokens (so identical relevance), differing only in
+		// whether the description trips ABSTRACT_LEAD. Their score gap IS the specificity
+		// penalty, isolated. "Study of meaning" matches; "Study meaning" does not; both
+		// tokenize to {study, meaning} (the stopword "of" drops out).
+		const abstract = candidate({ title: 'Foo', description: 'Study of meaning' });
+		const plain = candidate({ title: 'Foo', description: 'Study meaning' });
+		const penalty = (ctx: EngineContext) => scoreCandidate(plain, ctx) - scoreCandidate(abstract, ctx);
+
+		it('applies the full penalty at cold start (no interest to defer to)', () => {
+			expect(penalty(context())).toBeCloseTo(FEED.specificityWeight, 5);
+		});
+
+		it('softens the penalty once the user has engaged with the topic', () => {
+			const warm = context({
+				tokenWeights: { study: 2, meaning: 2 },
+				tokenDocFreq: { study: 1, meaning: 1 }
+			});
+			const warmPenalty = penalty(warm);
+			expect(warmPenalty).toBeLessThan(penalty(context())); // defers to expressed interest
+			expect(warmPenalty).toBeGreaterThan(0); // but never fully inverts the signal
 		});
 	});
 });

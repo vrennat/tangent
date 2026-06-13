@@ -11,6 +11,14 @@ export const FEED = {
 	/** Weight on relevance (overlap with the user's interest vector). Squashed via tanh. */
 	relevanceWeight: 2.5,
 	/**
+	 * Weight on the intrinsic specificity signal. A pure position ranking climbs the
+	 * abstraction ladder — cold-start rabbit holes collapse into Entity / Language /
+	 * Science. This term pulls the feed toward vivid, concrete, named/dated articles
+	 * and away from bare definitional categories. Scaled like position/relevance so it
+	 * reorders within the lead band without overriding a genuinely strong match.
+	 */
+	specificityWeight: 1.5,
+	/**
 	 * Gentle tiebreaker for candidates that have a lead image. Deliberately small:
 	 * the card leads with the article's hook text, not the picture (Wikipedia images
 	 * are often mediocre), so image-availability nudges ties but must not shape which

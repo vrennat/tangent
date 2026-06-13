@@ -84,6 +84,14 @@ async function fetchLeadLinkTitles(title: string): Promise<string[]> {
 	const html = typeof text === 'string' ? text : (text?.['*'] ?? '');
 	if (!html) return [];
 
+	// The section-0 parse appends the article's citation list (<ol class="references">).
+	// Its <cite> links — identifier stubs (Doi/Hdl/ISSN), journals, authors, publishers —
+	// are reference plumbing, not rabbit-hole connections, so drop the apparatus (and the
+	// inline <sup> footnote markers) before collecting links.
+	const body = html
+		.replace(/<ol\b[^>]*class="[^"]*\breferences\b[^"]*"[\s\S]*?<\/ol>/gi, '')
+		.replace(/<sup\b[^>]*class="[^"]*\breference\b[^"]*"[\s\S]*?<\/sup>/gi, '');
+
 	const seen = new Set<string>();
 	const ordered: string[] = [];
 	const collect = (fragment: string) => {
@@ -102,9 +110,9 @@ async function fetchLeadLinkTitles(title: string): Promise<string[]> {
 	// Prose paragraphs first, then everything else (infobox/taxobox, lists). This ranks
 	// an article's narrative links above its infobox links — e.g. Octopus leads with
 	// Mollusc/Cephalopod/Squid, not the taxobox's geological periods.
-	const prose = (html.match(/<p\b[\s\S]*?<\/p>/gi) ?? []).join('\n');
+	const prose = (body.match(/<p\b[\s\S]*?<\/p>/gi) ?? []).join('\n');
 	collect(prose);
-	collect(html);
+	collect(body);
 	return ordered;
 }
 
@@ -138,10 +146,15 @@ async function enrichByTitles(orderedTitles: string[]): Promise<Candidate[]> {
 	for (const p of data.query?.pages ?? []) byTitle.set(p.title, p);
 
 	const candidates: Candidate[] = [];
+	const emitted = new Set<string>();
 	slice.forEach((requested, position) => {
 		const page = byTitle.get(resolve(requested));
 		if (!page || page.missing || page.ns !== 0) return;
 		if (!page.description && !page.thumbnail) return; // substantive pages only
+		// Distinct lead links can redirect/normalize to the same canonical page; keep the
+		// first (most prominent) occurrence so the same article never appears twice.
+		if (emitted.has(page.title)) return;
+		emitted.add(page.title);
 		candidates.push(toCandidate(page, 'link', position));
 	});
 	return candidates;

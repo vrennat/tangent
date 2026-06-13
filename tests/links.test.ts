@@ -56,5 +56,11 @@ describe('articleTitleFromHref', () => {
 		it('rejects in-page anchors', () => {
 			expect(articleTitleFromHref('#cite_note-3')).toBeNull();
 		});
+
+		it('rejects citation identifier stubs', () => {
+			expect(articleTitleFromHref('https://en.wikipedia.org/wiki/Doi_(identifier)')).toBeNull();
+			expect(articleTitleFromHref('https://en.wikipedia.org/wiki/Hdl_(identifier)')).toBeNull();
+			expect(articleTitleFromHref('https://en.wikipedia.org/wiki/ISSN_(identifier)')).toBeNull();
+		});
 	});
 });
