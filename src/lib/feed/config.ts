@@ -8,8 +8,13 @@
 export const FEED = {
 	/** Baseline score every candidate starts with. */
 	base: 1,
-	/** Weight on relevance (overlap with the user's interest vector). Squashed via tanh. */
-	relevanceWeight: 2.5,
+	/** Weight on relevance (overlap with the user's interest vector). Squashed via tanh.
+	 *  Raised 2.5 -> 4.0 to lean the feed harder toward what the user actually reads:
+	 *  at 2.5 the learned-interest term was dominated by position (2.4) + specificity
+	 *  (1.5), so passive engagement barely shifted the stream (sim: +1.2% on-interest,
+	 *  within noise). At 4.0 a well-matched candidate can out-score a merely-prominent
+	 *  one. */
+	relevanceWeight: 4.0,
 	/** Weight on avoided tokens learned from quick skips / bounces. Squashed via tanh. */
 	avoidanceWeight: 1.6,
 	/** Weight on the user's explicit tangent flavor (technology, oddities, culture, etc.). */
