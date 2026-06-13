@@ -124,12 +124,14 @@
 	// fresh card at the tail of the feed (relation 'dive'), then scrolls you to it — so the
 	// feed itself stays the record of the rabbit hole rather than a hidden reader stack.
 	// `fromTitle` is the article you were reading, for the new card's "Dove in from …"
-	// breadcrumb. addDive feeds the engagement profile (clickthrough + seen) on its own.
+	// breadcrumb. beginDive feeds the engagement profile (clickthrough + seen) on its own.
 	async function handleDive(title: string) {
 		const fromTitle = reader.current ?? '';
 		reader.close();
-		const id = await feed.addDive(title, fromTitle);
-		if (id) await goToCard(id);
+		// beginDive drops a placeholder card synchronously and returns its id, so we scroll
+		// to (and ring) it right away — the landing animation plays while the body loads in.
+		const id = feed.beginDive(title, fromTitle);
+		await goToCard(id);
 	}
 
 	let jumpingRelated = $state(false);

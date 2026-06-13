@@ -170,26 +170,60 @@ class FeedState {
 	 * tail and steer the hole through it. Unlike branchFrom (which picks a *related*
 	 * page), this lands exactly on the title the reader tapped. `fromTitle` is the
 	 * article you were reading, so the new card's breadcrumb reads "Dove in from …".
-	 * A dive is an intentional read, so it feeds both signals: clickthrough (interest)
-	 * and seen (document-frequency). Returns the new card's id to scroll to, or null.
+	 *
+	 * Optimistic: because we already know the destination title, the placeholder card
+	 * is appended SYNCHRONOUSLY and its id returned immediately, so the caller can
+	 * scroll/animate to it before the `/api/card` round trip finishes. The real body
+	 * (and the clickthrough + seen engagement signals, which need the article's tokens)
+	 * is patched in by {@link #resolveCardInto} once it loads.
 	 */
-	async addDive(title: string, fromTitle: string): Promise<string | null> {
-		// Drain any inflight build before mutating the buffer.
+	beginDive(title: string, fromTitle: string): string {
+		// New buffered picks were built from the old tip; the dive changes the tip.
+		this.#buffer = [];
+		const placeholder = this.#pendingCard(title, { fromTitle, relation: 'dive' });
+		this.cards = [...this.cards, placeholder];
+		this.trail = [...this.trail, this.#trailNode(placeholder)];
+		if (browser) saveTrail(this.seedTitle ?? '', this.trail);
+		this.status = 'ready';
+		void this.#resolveCardInto(placeholder.id, title, { clickthrough: true });
+		return placeholder.id;
+	}
+
+	/**
+	 * Fill an optimistic placeholder with its fetched article, or drop it on failure.
+	 * Refilling the prefetch buffer waits until the card resolves so the chain never
+	 * builds from a tip that turned out not to exist.
+	 */
+	async #resolveCardInto(
+		id: string,
+		title: string,
+		opts: { clickthrough?: boolean } = {}
+	): Promise<void> {
+		// Drain any inflight build, then discard whatever it buffered — it was built
+		// from the pre-dive tip and would otherwise jump the chain ahead of the dive.
 		await this.#tail;
 		this.#buffer = [];
-
 		const cardResult = await fetchCardApi(title);
-		if (!cardResult.ok) return null;
 
-		const built = this.#card(cardResult.data, { fromTitle, relation: 'dive' });
-		this.cards = [...this.cards, built];
-		this.trail = [...this.trail, this.#trailNode(built)];
-		if (browser) saveTrail(this.seedTitle ?? '', this.trail);
-		profile.recordClickthrough(cardResult.data);
-		profile.recordSeen(cardResult.data);
+		if (!cardResult.ok) {
+			// Roll back the placeholder — the dive dead-ended (rare: a 404/redirect miss
+			// or upstream hiccup). Silent, matching the old addDive's no-op-on-failure: a
+			// single failed dive shouldn't flip the whole feed into the "connection hiccup"
+			// banner. The feed stays where it was; the user can tap the link again.
+			this.cards = this.cards.filter((c) => c.id !== id);
+			this.trail = this.trail.filter((n) => n.id !== id);
+			if (browser) saveTrail(this.seedTitle ?? '', this.trail);
+			return;
+		}
+
+		const article = cardResult.data;
+		this.cards = this.cards.map((c) =>
+			c.id === id ? { ...c, article, pending: false } : c
+		);
+		if (opts.clickthrough) profile.recordClickthrough(article);
+		profile.recordSeen(article);
 		this.status = 'ready';
 		void this.#refill();
-		return built.id;
 	}
 
 	/**
@@ -405,6 +439,24 @@ class FeedState {
 
 	#card(article: Article, connection: Connection): FeedCard {
 		return { id: `${article.title}#${this.#counter++}`, article, connection };
+	}
+
+	/**
+	 * A placeholder card for an optimistic dive: we know the title (the link the reader
+	 * tapped), so the card renders its title + breadcrumb immediately and shows a skeleton
+	 * body until {@link #resolveCardInto} swaps in the fetched article.
+	 */
+	#pendingCard(title: string, connection: Connection): FeedCard {
+		const article: Article = {
+			title,
+			description: null,
+			extract: '',
+			thumbnail: null,
+			wikiUrl: `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}`,
+			lang: 'en',
+			tokens: []
+		};
+		return { id: `${title}#${this.#counter++}`, article, connection, pending: true };
 	}
 
 	#cardFromNode(article: Article, node: TrailNode): FeedCard {

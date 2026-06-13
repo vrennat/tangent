@@ -23,6 +23,10 @@
 
 	const article = $derived(card.article);
 	const liked = $derived(profile.isLiked(article.title));
+	// An optimistic dive placeholder: title + breadcrumb are real, the body is still
+	// loading. We show its title immediately (the landing animation already played) and
+	// a skeleton body, and suppress interactions until the real article patches in.
+	const pending = $derived(card.pending ?? false);
 
 	let branching = $state(false);
 	let interacted = false;
@@ -55,6 +59,7 @@
 
 	// Tapping anywhere on the card (except buttons/links) opens the reader.
 	function handleCardTap(event: MouseEvent) {
+		if (pending) return; // nothing to read yet
 		const el = event.target as HTMLElement | null;
 		if (el?.closest('button, a')) return;
 		if (window.getSelection()?.toString()) return;
@@ -89,7 +94,9 @@
 			(entries) => {
 				for (const entry of entries) {
 					if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
-						if (!visibleSince) visibleSince = performance.now();
+						// Don't accrue dwell against a placeholder (its body isn't here yet, and
+						// the dive already credits a clickthrough on resolve); still mark it seen.
+						if (!pending && !visibleSince) visibleSince = performance.now();
 						if (!hasSignaledSeen) {
 							hasSignaledSeen = true;
 							onSeen?.();
@@ -140,15 +147,26 @@
 				{article.title}
 			</h2>
 
-			{#if article.description}
-				<p class="mt-1 font-display text-[15px] text-faint italic">{article.description}</p>
-			{/if}
+			{#if pending}
+				<!-- Body still loading: the title + breadcrumb landed instantly; pulse the rest. -->
+				<div class="mt-3 space-y-2" aria-hidden="true">
+					<div class="h-3 w-full animate-pulse rounded-full bg-surface-2"></div>
+					<div class="h-3 w-full animate-pulse rounded-full bg-surface-2"></div>
+					<div class="h-3 w-4/5 animate-pulse rounded-full bg-surface-2"></div>
+				</div>
+				<p class="sr-only">Loading article…</p>
+			{:else}
+				{#if article.description}
+					<p class="mt-1 font-display text-[15px] text-faint italic">{article.description}</p>
+				{/if}
 
-			<!-- Full summary extract: the hook. Wikipedia bounds this to a sentence-complete
-			     few paragraphs, so we show it whole rather than clamping it to a stub. -->
-			<p class="mt-3 font-display text-base leading-relaxed text-muted">{article.extract}</p>
+				<!-- Full summary extract: the hook. Wikipedia bounds this to a sentence-complete
+				     few paragraphs, so we show it whole rather than clamping it to a stub. -->
+				<p class="mt-3 font-display text-base leading-relaxed text-muted">{article.extract}</p>
+			{/if}
 		</div>
 
+		{#if !pending}
 		<div class="flex flex-wrap items-center gap-2 pt-1">
 			<button
 				type="button"
@@ -197,5 +215,6 @@
 				<ArrowRight class="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
 			</button>
 		</div>
+		{/if}
 	</div>
 </div>

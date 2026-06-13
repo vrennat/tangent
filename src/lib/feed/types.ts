@@ -15,6 +15,13 @@ export interface FeedCard {
 	id: string;
 	article: Article;
 	connection: Connection;
+	/**
+	 * True while an optimistic placeholder is still loading its real article. A dive
+	 * appends the card and scrolls to it immediately (we already know the title), then
+	 * swaps in the fetched body — so the landing animation starts before the network
+	 * round trip finishes instead of after it. Undefined/false once resolved.
+	 */
+	pending?: boolean;
 }
 
 /** One node in the persistent trail. Detours (surprises) are skipped when deriving the chain tip. */
