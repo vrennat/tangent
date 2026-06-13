@@ -2,6 +2,7 @@
   "name": "tangent",
   "version": "0.1.0",
   "description": "A Wikipedia rabbit hole feed — scroll through connected articles and see how they link.",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "scripts": {

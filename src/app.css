@@ -252,14 +252,35 @@ body::before {
 	height: auto;
 	border-radius: 0.5rem;
 }
+/* Center thumbnails in the reading column instead of letting them float left/right.
+   Parsoid floats figures via mw-halign-* classes; we override those (see below) so
+   every figure becomes a centered block. Capped at ~30rem rather than the full column
+   because native thumbs top out near 640px — stretching wider only blurs them. The
+   figure itself is centered; the image inside is the centered block. */
 .wiki-content figure {
-	margin: 1em 0;
+	margin: 1.5em auto;
+	max-width: min(100%, 30rem);
+	text-align: center;
+}
+.wiki-content figure img {
+	display: block;
+	margin-inline: auto;
+}
+/* Neutralize Parsoid's float alignment so left/right-floated thumbs also center. */
+.wiki-content figure.mw-halign-left,
+.wiki-content figure.mw-halign-right,
+.wiki-content .mw-halign-left,
+.wiki-content .mw-halign-right {
+	float: none;
+	margin-inline: auto;
 }
 .wiki-content figcaption,
 .wiki-content .thumbcaption {
 	font-size: 0.8rem;
 	color: var(--color-faint);
-	margin-top: 0.4em;
+	margin-top: 0.5em;
+	text-align: center;
+	line-height: 1.5;
 }
 .wiki-content b,
 .wiki-content strong {
@@ -299,6 +320,88 @@ body::before {
 	color: var(--color-ink);
 	background: var(--color-surface-2);
 }
+/*
+ * "Quick facts" disclosure — Wikipedia infoboxes wrapped (server-side, see
+ * sanitizeArticleHtml) in <details class="quick-facts"> so the dense fact table stays
+ * available without dominating the column. Collapsed by default. The infobox carries
+ * light inline backgrounds and a fixed pixel width built for Wikipedia's own theme;
+ * we override them here (non-important inline styles lose to an !important rule) so the
+ * table reads as a full-width dark-theme table once opened.
+ */
+.wiki-content .quick-facts {
+	margin: 1.4em 0;
+	border: 1px solid var(--color-hair);
+	border-radius: var(--radius-card);
+	background: var(--color-surface);
+	overflow: hidden;
+}
+.wiki-content .quick-facts > summary {
+	cursor: pointer;
+	list-style: none;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.7rem 0.9rem;
+	font-family: var(--font-body);
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--color-muted);
+	transition: color 0.12s ease;
+}
+.wiki-content .quick-facts > summary::-webkit-details-marker {
+	display: none;
+}
+.wiki-content .quick-facts > summary:hover {
+	color: var(--color-accent);
+}
+/* Chevron rotates to point down when the disclosure is open. */
+.wiki-content .quick-facts > summary::before {
+	content: '';
+	width: 0.5rem;
+	height: 0.5rem;
+	border-right: 1.5px solid currentColor;
+	border-bottom: 1.5px solid currentColor;
+	transform: rotate(-45deg);
+	transition: transform 0.15s ease;
+}
+.wiki-content .quick-facts[open] > summary::before {
+	transform: rotate(45deg);
+}
+/* The infobox table itself: shed Wikipedia's fixed width + light inline cell colors,
+   and the table furniture (we keep an outer card border, not per-cell grids). */
+.wiki-content .quick-facts table {
+	width: 100% !important;
+	max-width: 100% !important;
+	margin: 0;
+	font-size: 0.8rem;
+}
+.wiki-content .quick-facts table,
+.wiki-content .quick-facts tbody,
+.wiki-content .quick-facts tr {
+	background: transparent !important;
+}
+.wiki-content .quick-facts th,
+.wiki-content .quick-facts td {
+	background: transparent !important;
+	color: var(--color-muted) !important;
+	border: 0;
+	border-top: 1px solid var(--color-hair);
+	padding: 0.45rem 0.9rem;
+}
+.wiki-content .quick-facts th {
+	color: var(--color-ink) !important;
+	font-weight: 600;
+}
+/* The infobox's own header/caption cell (the article title + image) reads as a banner. */
+.wiki-content .quick-facts caption,
+.wiki-content .quick-facts th[colspan] {
+	text-align: center;
+}
+.wiki-content .quick-facts img {
+	border-radius: 0.375rem;
+}
 .wiki-content .hatnote {
 	color: var(--color-faint);
 	font-style: italic;
@@ -322,7 +425,6 @@ body::before {
 .wiki-content .mw-empty-elt,
 .wiki-content .mw-jump-link,
 .wiki-content .sidebar,
-.wiki-content .infobox,
 .wiki-content .vertical-navbox,
 .wiki-content .IPA,
 .wiki-content .ext-phonos,

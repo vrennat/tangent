@@ -94,5 +94,17 @@
 		{:else}
 			<p class="text-sm text-faint">Like or read articles to tune your feed.</p>
 		{/if}
+
+		<!-- Reachable entry to the legal/about surface from the feed itself, since the
+		     page footer sits below an infinite scroll. -->
+		<div class="mt-4 flex items-center gap-4 border-t border-hair pt-3 text-xs text-faint">
+			<a href="/about" onclick={onClose} class="transition-colors hover:text-muted">About</a>
+			<a
+				href="https://github.com/vrennat/tangent"
+				target="_blank"
+				rel="noopener noreferrer"
+				class="transition-colors hover:text-muted">Source</a
+			>
+		</div>
 	</div>
 </div>

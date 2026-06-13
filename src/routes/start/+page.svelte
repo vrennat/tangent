@@ -3,6 +3,7 @@
 	import type { SearchResult } from '$lib/wikipedia/types';
 	import { SEEDS, randomSeed } from '$lib/seeds';
 	import BrandMark from '$lib/components/BrandMark.svelte';
+	import RelationIcon from '$lib/components/RelationIcon.svelte';
 
 	let query = $state('');
 	let results = $state<SearchResult[]>([]);
@@ -169,9 +170,7 @@
 		class="mt-5 inline-flex items-center gap-2 rounded-full border border-spark/30 bg-spark/5
 			px-4 py-2 text-sm font-medium text-spark transition-all hover:bg-spark/10 active:scale-95"
 	>
-		<svg class="size-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-			<path d="M12 2l1.9 5.6L19.5 9l-5.6 1.9L12 16l-1.9-5.1L4.5 9l5.6-1.4L12 2z" />
-		</svg>
+		<RelationIcon relation="surprise" class="size-4" />
 		Surprise me
 	</button>
 
@@ -182,11 +181,9 @@
 				<button
 					type="button"
 					onclick={() => enter(seed.title)}
-					class="inline-flex items-center gap-1.5 rounded-full border border-hair
-						bg-surface/60 px-3 py-1.5 text-sm text-muted transition-all
-						hover:border-accent/50 hover:text-ink active:scale-95"
+					class="rounded-full border border-hair bg-surface/60 px-3 py-1.5 text-sm
+						text-muted transition-all hover:border-accent/50 hover:text-ink active:scale-95"
 				>
-					<span aria-hidden="true">{seed.emoji}</span>
 					{seed.title}
 				</button>
 			{/each}

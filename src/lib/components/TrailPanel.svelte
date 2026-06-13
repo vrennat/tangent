@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { TrailNode } from '$lib/feed/types';
+	import RelationIcon from './RelationIcon.svelte';
 
 	let {
 		trail,
@@ -93,28 +94,9 @@
 						disabled:cursor-default disabled:opacity-35 disabled:hover:bg-transparent
 						{node.isDetour ? 'ml-4 border-l-2 border-dashed border-hair pl-3 opacity-60' : ''}"
 				>
-					<!-- Relation icon -->
+					<!-- Relation icon (shared geometric set) -->
 					<span class="mt-0.5 shrink-0 {node.relation === 'surprise' ? 'text-spark' : node.relation === 'seed' ? 'text-accent' : node.relation === 'dive' ? 'text-accent' : 'text-muted'}">
-						{#if node.relation === 'seed'}
-							<svg class="size-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-								<path d="M12 2l1.9 5.6L19.5 9l-5.6 1.9L12 16l-1.9-5.1L4.5 9l5.6-1.4L12 2z" />
-							</svg>
-						{:else if node.relation === 'surprise'}
-							<svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-								<ellipse cx="12" cy="12" rx="9" ry="9" opacity="0.4" />
-								<ellipse cx="12" cy="12" rx="5" ry="5" opacity="0.7" />
-								<circle cx="12" cy="12" r="1.5" fill="currentColor" />
-							</svg>
-						{:else if node.relation === 'dive'}
-							<svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-								<path d="M12 5v14M12 19l-4-4M12 19l4-4" />
-							</svg>
-						{:else}
-							<svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-								<path d="M4 4v8a4 4 0 0 0 4 4h12" />
-								<path d="m16 12 4 4-4 4" />
-							</svg>
-						{/if}
+						<RelationIcon relation={node.relation} />
 					</span>
 
 					<span class="min-w-0 flex-1 truncate text-sm text-ink">{node.title}</span>

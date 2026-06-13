@@ -67,7 +67,59 @@ export function sanitizeArticleHtml(raw: string): string {
 		(_m, slash: string, level: string) => `<${slash}h${Number(level) + 1}`
 	);
 
+	// Tuck infoboxes into a collapsed "Quick facts" disclosure. The dense fact table
+	// (capital, population, taxonomy, …) is worth keeping, but linearized into our
+	// single column it dominates the reading flow — so we preserve it, collapsed.
+	// Done last so the table's links/images already carry the rewritten URLs above.
+	html = wrapInfoboxes(html);
+
 	return html;
+}
+
+/**
+ * Wrap each infobox `<table>` in a collapsed `<details class="quick-facts">` so the
+ * structured facts stay available without blocking the prose. Parsoid emits
+ * well-formed XHTML, so we find each table's matching close by counting nested
+ * `<table>` depth (infoboxes routinely nest tables for sub-groups). The infobox's
+ * own light inline backgrounds are neutralized in CSS (`.quick-facts`), not here.
+ */
+function wrapInfoboxes(html: string): string {
+	const OPEN = /<table\b[^>]*\bclass="[^"]*\binfobox\b[^"]*"[^>]*>/gi;
+	const out: string[] = [];
+	let cursor = 0;
+
+	for (let m = OPEN.exec(html); m; m = OPEN.exec(html)) {
+		const start = m.index;
+		const end = matchingTableEnd(html, start);
+		if (end === -1) continue; // malformed — leave untouched
+
+		out.push(html.slice(cursor, start));
+		out.push(
+			'<details class="quick-facts"><summary>Quick facts</summary>',
+			html.slice(start, end),
+			'</details>'
+		);
+		cursor = end;
+		OPEN.lastIndex = end;
+	}
+
+	out.push(html.slice(cursor));
+	return out.join('');
+}
+
+/** Index just past the `</table>` that closes the `<table>` opening at `start`. -1 if unbalanced. */
+function matchingTableEnd(html: string, start: number): number {
+	const TAG = /<(\/?)table\b/gi;
+	TAG.lastIndex = start;
+	let depth = 0;
+	for (let t = TAG.exec(html); t; t = TAG.exec(html)) {
+		depth += t[1] ? -1 : 1;
+		if (depth === 0) {
+			const close = html.indexOf('>', t.index);
+			return close === -1 ? -1 : close + 1;
+		}
+	}
+	return -1;
 }
 
 /** Fetch a full article as sanitized, inline-ready HTML. Null if the page is gone. */
