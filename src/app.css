@@ -506,10 +506,17 @@ body::before {
  * sidebar/infobox/citation furniture that linearizes into a wall of navigation and
  * footnote noise in our single dark column (the lavender "sidebar-heading" bars, the
  * "Part of a series on…" link lists, and the [1][2] markers peppered through the prose).
+ * `.nomobile` is Wikipedia's own "too wide for a phone" flag — graphical timelines
+ * ({{Nature timeline}} and kin) are absolutely-positioned, fixed-em-width graphics. The
+ * ones we recognize are reflowed to `.wh-tl` server-side (wikipedia/timeline.ts); this
+ * rule just nets any nomobile graphic we couldn't parse, so it never blows out the
+ * column. `.navbar` is the template "view·talk·edit" / "v·t·e" edit chrome — reader noise.
  */
 .wiki-content .mw-editsection,
 .wiki-content .shortdescription,
 .wiki-content .noprint,
+.wiki-content .nomobile,
+.wiki-content .navbar,
 .wiki-content .navbox,
 .wiki-content .navbox-styles,
 .wiki-content .metadata,
@@ -540,4 +547,151 @@ body::before {
 .wiki-content a.wh-external:has(img)::after,
 .wiki-content a.mw-file-description::after {
 	content: none;
+}
+/*
+ * Reflowed graphical timeline ({{Nature timeline}} & kin) — built server-side from the
+ * desktop graphic's own coordinates (see wikipedia/timeline.ts). A single continuous
+ * vertical spine: era-coloured segments, events as dots at their true (log) positions,
+ * life-grade onsets as rings, with the integer-Gya axis down the left. The track height
+ * and every element's top/height are inline px (computed from source em); these rules
+ * own only the horizontal layout (keyed off --tl-spine) and styling. Mirrored in iOS
+ * ReaderCSS.swift.
+ */
+.wiki-content .wh-tl {
+	--tl-spine: 88px;
+	margin: 1.6em 0;
+	border: 1px solid var(--color-hair);
+	border-radius: var(--radius-card);
+	background: linear-gradient(180deg, var(--color-surface), var(--color-void));
+	overflow: hidden;
+}
+.wiki-content .wh-tl-title {
+	font-family: var(--font-body);
+	font-size: 0.75rem;
+	font-weight: 700;
+	letter-spacing: 0.09em;
+	text-transform: uppercase;
+	color: var(--color-accent);
+	padding: 0.85rem 1rem 0.15rem;
+}
+.wiki-content .wh-tl-title a {
+	color: var(--color-accent);
+	text-decoration: none;
+}
+.wiki-content .wh-tl-axis {
+	display: flex;
+	justify-content: space-between;
+	font-family: var(--font-body);
+	font-size: 0.65rem;
+	color: var(--color-faint);
+	padding: 0.4rem 1rem 0.75rem;
+	border-bottom: 1px solid var(--color-hair);
+}
+.wiki-content .wh-tl-track {
+	position: relative;
+	margin: 0.5rem 0;
+}
+/* Age gridlines + their integer-Gya labels (left gutter). */
+.wiki-content .wh-tl-grid {
+	position: absolute;
+	left: 30px;
+	right: 14px;
+	height: 1px;
+	background: var(--color-hair);
+	opacity: 0.6;
+}
+.wiki-content .wh-tl-age {
+	position: absolute;
+	left: 10px;
+	width: 18px;
+	text-align: right;
+	font-family: var(--font-body);
+	font-size: 0.5625rem;
+	color: var(--color-faint);
+	transform: translateY(-50%);
+}
+.wiki-content .wh-tl-age-unit {
+	transform: none;
+	color: var(--color-muted);
+}
+/* Era-coloured spine segment (top/height inline) + its vertical name in a left lane. */
+.wiki-content .wh-tl-seg {
+	position: absolute;
+	left: calc(var(--tl-spine) - 4px);
+	width: 8px;
+	border-radius: 4px;
+	opacity: 0.92;
+}
+.wiki-content .wh-tl-segname {
+	position: absolute;
+	left: calc(var(--tl-spine) - 32px);
+	width: 24px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	writing-mode: vertical-rl;
+	font-family: var(--font-body);
+	font-size: 0.5625rem;
+	font-weight: 700;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	text-align: center;
+	color: var(--color-faint);
+	opacity: 0.9;
+	overflow: hidden;
+}
+/* Hairline from a nudged label back to its true position on the spine. */
+.wiki-content .wh-tl-conn {
+	position: absolute;
+	left: var(--tl-spine);
+	width: 1px;
+	background: var(--color-hair-strong);
+}
+.wiki-content .wh-tl-mk {
+	position: absolute;
+	left: var(--tl-spine);
+	transform: translate(-50%, -50%);
+}
+.wiki-content .wh-tl-dot {
+	display: block;
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	background: var(--color-accent);
+	box-shadow: 0 0 0 3px var(--color-void);
+}
+.wiki-content .wh-tl-ring {
+	display: block;
+	width: 11px;
+	height: 11px;
+	border-radius: 50%;
+	border: 2.5px solid var(--color-accent);
+	background: var(--color-void);
+	box-shadow: 0 0 0 3px var(--color-void);
+}
+.wiki-content .wh-tl-lab {
+	position: absolute;
+	left: calc(var(--tl-spine) + 14px);
+	right: 6px;
+	transform: translateY(-50%);
+	line-height: 1.15;
+}
+/* `.wh-tl-lab a` (specificity 0,2,1, defined after) outranks the client-added
+   `.wiki-content a.wh-dive` underline so spine links read clean. */
+.wiki-content .wh-tl-lab a {
+	font-size: 0.9rem;
+	color: var(--color-ink);
+	text-decoration: none;
+}
+.wiki-content .wh-tl-lab a:hover {
+	color: var(--color-accent);
+}
+/* Life-grade onset labels read as quiet era markers, not events. */
+.wiki-content .wh-tl-onset a {
+	font-family: var(--font-body);
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: var(--color-muted);
 }

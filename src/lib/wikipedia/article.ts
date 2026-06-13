@@ -1,4 +1,5 @@
 import { restGetText, restTitlePath } from './client';
+import { reflowGraphicalTimelines } from './timeline';
 
 const WIKI = 'https://en.wikipedia.org';
 
@@ -21,6 +22,11 @@ export function sanitizeArticleHtml(raw: string): string {
 		const close = html.lastIndexOf('</body>');
 		html = html.slice(open + 1, close === -1 ? undefined : close);
 	}
+
+	// Reflow graphical-timeline templates into a mobile-native list while the rich
+	// Parsoid structure (positions, colours, links) is still intact — before the
+	// attribute stripping below. Emitted `./` hrefs are resolved by the URL rewrite.
+	html = reflowGraphicalTimelines(html);
 
 	html = html
 		// Remove executable / external-resource elements.

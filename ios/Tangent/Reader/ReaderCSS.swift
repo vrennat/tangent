@@ -111,11 +111,60 @@ enum ReaderCSS {
 	.hatnote { color: var(--faint); font-style: italic; font-size: 0.85rem; margin-bottom: 0.8em; }
 	/* Hide Wikipedia chrome so the reader opens on the article, not a Wikipedia mirror:
 	   editorial furniture plus the sidebar/navbox/citation noise that linearizes into a
-	   wall of navigation in our single dark column. Mirrors the web reader's hide list. */
-	.mw-editsection, .shortdescription, .noprint, .navbox, .navbox-styles, .metadata,
-	.ambox, .mbox-image, .mw-empty-elt, .mw-jump-link, .sidebar, .vertical-navbox, .IPA,
-	.ext-phonos, .mw-tmh-player, sup.reference, .reflist, ol.references, style, link {
+	   wall of navigation in our single dark column. Mirrors the web reader's hide list.
+	   .nomobile is WP's own "too wide for a phone" flag (graphical timelines etc.); the
+	   ones we recognize are reflowed to .wh-tl server-side (wikipedia/timeline.ts), so
+	   this just nets any we couldn't parse. .navbar is the view·talk·edit / v·t·e chrome. */
+	.mw-editsection, .shortdescription, .noprint, .nomobile, .navbar, .navbox,
+	.navbox-styles, .metadata, .ambox, .mbox-image, .mw-empty-elt, .mw-jump-link,
+	.sidebar, .vertical-navbox, .IPA, .ext-phonos, .mw-tmh-player, sup.reference,
+	.reflist, ol.references, style, link {
 	  display: none !important;
+	}
+	/* Reflowed graphical timeline ({{Nature timeline}} & kin) — a continuous era-coloured
+	   vertical spine with events as dots, life-grade onsets as rings, integer-Gya axis at
+	   left. top/height are inline px (from source em); these own horizontal layout (keyed
+	   off --tl-spine) + styling. Mirrors the web .wh-tl rules. */
+	.wh-tl {
+	  --tl-spine: 88px; margin: 1.6em 0; border: 1px solid var(--hair); border-radius: 14px;
+	  background: linear-gradient(180deg, var(--surface), var(--void)); overflow: hidden;
+	}
+	.wh-tl-title {
+	  font-family: var(--sans); font-size: 0.75rem; font-weight: 700; color: var(--accent);
+	  letter-spacing: 0.09em; text-transform: uppercase; padding: 0.85rem 1rem 0.15rem;
+	}
+	.wh-tl-title a { color: var(--accent); text-decoration: none; }
+	.wh-tl-axis {
+	  display: flex; justify-content: space-between; font-family: var(--sans);
+	  font-size: 0.65rem; color: var(--faint); padding: 0.4rem 1rem 0.75rem;
+	  border-bottom: 1px solid var(--hair);
+	}
+	.wh-tl-track { position: relative; margin: 0.5rem 0; }
+	.wh-tl-grid { position: absolute; left: 30px; right: 14px; height: 1px; background: var(--hair); opacity: 0.6; }
+	.wh-tl-age {
+	  position: absolute; left: 10px; width: 18px; text-align: right; font-family: var(--sans);
+	  font-size: 0.5625rem; color: var(--faint); transform: translateY(-50%);
+	}
+	.wh-tl-age-unit { transform: none; color: var(--muted); }
+	.wh-tl-seg { position: absolute; left: calc(var(--tl-spine) - 4px); width: 8px; border-radius: 4px; opacity: 0.92; }
+	.wh-tl-segname {
+	  position: absolute; left: calc(var(--tl-spine) - 32px); width: 24px; display: flex;
+	  align-items: center; justify-content: center; writing-mode: vertical-rl; font-family: var(--sans);
+	  font-size: 0.5625rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+	  text-align: center; color: var(--faint); opacity: 0.9; overflow: hidden;
+	}
+	.wh-tl-conn { position: absolute; left: var(--tl-spine); width: 1px; background: var(--hair-strong); }
+	.wh-tl-mk { position: absolute; left: var(--tl-spine); transform: translate(-50%, -50%); }
+	.wh-tl-dot { display: block; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--void); }
+	.wh-tl-ring {
+	  display: block; width: 11px; height: 11px; border-radius: 50%;
+	  border: 2.5px solid var(--accent); background: var(--void); box-shadow: 0 0 0 3px var(--void);
+	}
+	.wh-tl-lab { position: absolute; left: calc(var(--tl-spine) + 14px); right: 6px; transform: translateY(-50%); line-height: 1.15; }
+	.wh-tl-lab a { font-size: 0.9rem; color: var(--ink); text-decoration: none; }
+	.wh-tl-onset a {
+	  font-family: var(--sans); font-size: 0.7rem; font-weight: 700;
+	  letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted);
 	}
 	"""
 }
