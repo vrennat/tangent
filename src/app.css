@@ -280,6 +280,16 @@ body::before {
 	float: none;
 	margin-inline: auto;
 }
+/* Legacy (non-Parsoid) thumbnails use div.thumb > div.thumbinner with an inline
+   pixel width instead of <figure>. The inner box carries the width, so center IT
+   (margin auto) to match the figure treatment above; otherwise it sits flush-left. */
+.wiki-content .thumb {
+	float: none;
+	margin: 1.5em 0;
+}
+.wiki-content .thumbinner {
+	margin-inline: auto;
+}
 .wiki-content figcaption,
 .wiki-content .thumbcaption {
 	font-size: 0.8rem;

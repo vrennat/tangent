@@ -4,6 +4,8 @@
 	import { page } from '$app/state';
 	import { feed } from '$lib/feed/feedState.svelte';
 	import { reader } from '$lib/reader/readerState.svelte';
+	import { profile } from '$lib/engagement/profile.svelte';
+	import { fetchCard } from '$lib/feed/cardClient';
 	import { trailPanel } from '$lib/feed/trailPanel.svelte';
 	import { loadTrail } from '$lib/feed/trail';
 	import type { FeedCard } from '$lib/feed/types';
@@ -116,13 +118,19 @@
 	}
 
 	function handleRead(card: FeedCard) {
-		reader.open(card);
+		// The card's "Read" already recorded the clickthrough; just open the reader.
+		reader.open(card.article.title);
 	}
 
-	async function handleDive(title: string) {
-		reader.close();
-		const id = await feed.addDive(title);
-		if (id) await goToCard(id);
+	// Following an in-article link pushes a new reading level (a stack you can walk back
+	// out of) rather than re-rooting the feed. Push immediately so the reader swaps to a
+	// skeleton with no wait; fetch the card alongside only to feed the engagement profile
+	// (it needs the article's server tokens).
+	function handleFollow(title: string) {
+		reader.push(title);
+		void fetchCard(title).then((article) => {
+			if (article) profile.recordClickthrough(article);
+		});
 	}
 
 	let jumpingRelated = $state(false);
@@ -258,11 +266,7 @@
 		{/if}
 	</div>
 
-	{#if reader.card}
-		<ArticleReader
-			article={reader.card.article}
-			onClose={() => reader.close()}
-			onDive={handleDive}
-		/>
+	{#if reader.isOpen}
+		<ArticleReader onFollow={handleFollow} />
 	{/if}
 </div>

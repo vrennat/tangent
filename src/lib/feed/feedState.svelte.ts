@@ -166,34 +166,6 @@ class FeedState {
 	}
 
 	/**
-	 * Dive into an in-article link: appends to the trail and re-roots the chain.
-	 * Unlike surprises, dives are deliberate — the chain continues from here.
-	 * Drains inflight builds first to avoid race conditions on the buffer.
-	 */
-	async addDive(title: string): Promise<string | null> {
-		// Drain any inflight build before mutating the buffer.
-		await this.#tail;
-
-		const prevCard = this.cards.at(-1) ?? this.#buffer.at(-1);
-		this.#buffer = [];
-
-		const cardResult = await fetchCardApi(title);
-		if (!cardResult.ok) return null;
-
-		const built = this.#card(cardResult.data, {
-			fromTitle: prevCard?.article.title ?? '',
-			relation: 'dive'
-		});
-		this.cards = [...this.cards, built];
-		this.trail = [...this.trail, this.#trailNode(built)];
-		if (browser) saveTrail(this.seedTitle ?? '', this.trail);
-		profile.recordSeen(cardResult.data);
-		this.status = 'ready';
-		void this.#refill();
-		return built.id;
-	}
-
-	/**
 	 * Restore a previous session from sessionStorage.
 	 * Returns true if rehydration was performed (caller skips start()).
 	 * Returns false if no matching trail exists (caller should call start()).

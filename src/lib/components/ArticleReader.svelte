@@ -1,17 +1,14 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import type { Article } from '$lib/wikipedia/types';
+	import { tick, untrack } from 'svelte';
+	import { reader } from '$lib/reader/readerState.svelte';
 	import { articleTitleFromHref } from '$lib/wikipedia/links';
-	import { X } from '@lucide/svelte';
+	import { ChevronLeft, X } from '@lucide/svelte';
 
 	let {
-		article,
-		onClose,
-		onDive
+		onFollow
 	}: {
-		article: Article;
-		onClose: () => void;
-		onDive?: (title: string) => void;
+		/** Follow an in-article link: pushes a new reading level and feeds the profile. */
+		onFollow: (title: string) => void;
 	} = $props();
 
 	let asideEl = $state<HTMLElement | null>(null);
@@ -21,12 +18,25 @@
 	let htmlLoading = $state(false);
 	let htmlError = $state(false);
 
-	// Fetch the inline article HTML. Re-runs when `article` changes — opening a new
-	// card while the panel is already open swaps the content in place. The request is
-	// aborted on unmount/swap so a quick change doesn't waste it.
+	const current = $derived(reader.current);
+	const wikiUrl = $derived(
+		current ? `https://en.wikipedia.org/wiki/${encodeURIComponent(current.title.replace(/ /g, '_'))}` : ''
+	);
+
+	// Load the current level's HTML. Re-runs only when the shown level changes (open/
+	// push/back), not when we cache its html or track scroll. A level that was already
+	// visited has its html cached, so Back renders instantly with no refetch or flash.
 	$effect(() => {
-		const title = article.title;
-		if (scrollEl) scrollEl.scrollTop = 0;
+		const entry = reader.current;
+		if (!entry) return;
+		const { title, html } = untrack(() => ({ title: entry.title, html: entry.html }));
+
+		if (html) {
+			articleHtml = html;
+			htmlLoading = false;
+			htmlError = false;
+			return;
+		}
 
 		const controller = new AbortController();
 		articleHtml = null;
@@ -35,8 +45,12 @@
 		fetch(`/api/article?title=${encodeURIComponent(title)}`, { signal: controller.signal })
 			.then((res) => res.json())
 			.then((data: { html: string | null }) => {
-				if (data.html) articleHtml = data.html;
-				else htmlError = true;
+				if (data.html) {
+					articleHtml = data.html;
+					reader.cacheHtml(data.html);
+				} else {
+					htmlError = true;
+				}
 				htmlLoading = false;
 			})
 			.catch((err: unknown) => {
@@ -47,51 +61,77 @@
 		return () => controller.abort();
 	});
 
-	// Rewire article links once the HTML renders.
-	// - Wikipedia article links become dives (left-click) or new-tab tangents (cmd/middle).
-	// - Everything else opens on Wikipedia in a new tab.
+	// Restore this level's scroll offset once its content is in the DOM (0 for a fresh
+	// level, the saved offset when walking back). Reads scrollTop untracked so ongoing
+	// scrolling doesn't retrigger and fight the user.
 	$effect(() => {
-		if (!contentEl || !articleHtml) return;
+		articleHtml;
+		const entry = reader.current;
+		if (!entry || !articleHtml || !scrollEl) return;
+		const top = untrack(() => entry.scrollTop);
+		tick().then(() => {
+			if (scrollEl) scrollEl.scrollTop = top;
+		});
+	});
 
-		for (const a of contentEl.querySelectorAll('a')) {
-			const href = a.getAttribute('href') ?? '';
-			if (href.startsWith('#')) continue;
-
-			const title = articleTitleFromHref(href);
-			if (title) {
-				// Real URL preserves middle/cmd-click behavior (new tangent in new tab).
-				a.setAttribute('href', `/?seed=${encodeURIComponent(title)}`);
-				a.dataset.seed = title;
-				a.classList.add('wh-dive');
-				a.removeAttribute('target');
-			} else {
-				a.setAttribute('target', '_blank');
-				a.setAttribute('rel', 'noopener noreferrer');
-				a.classList.add('wh-external');
-			}
-		}
+	// Click handling lives on the (stable) content container and classifies each link's
+	// raw href on click — so it keeps working across content swaps and cached Back
+	// renders, independent of the cosmetic rewrite below (which can lag a render).
+	//   - Wikipedia article link → follow in-app (left-click) or new-tab tangent (cmd/ctrl).
+	//   - In-page anchor (#section) → default scroll.
+	//   - Anything else (citations, File:/Category:, off-wiki) → open in a new tab.
+	$effect(() => {
+		const el = contentEl;
+		if (!el) return;
 
 		const onClick = (event: MouseEvent) => {
 			if (event.defaultPrevented || event.button !== 0) return;
-			if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 			const anchor = (event.target as HTMLElement | null)?.closest?.('a');
-			const seed = anchor?.dataset.seed;
-			if (!seed) return;
+			if (!anchor) return;
+			const href = anchor.getAttribute('href') ?? '';
+			if (href.startsWith('#')) return;
+
+			const title = anchor.dataset.seed ?? articleTitleFromHref(href);
 			event.preventDefault();
-			if (onDive) {
-				onDive(seed);
+			if (title) {
+				if (event.metaKey || event.ctrlKey) {
+					window.open(`/?seed=${encodeURIComponent(title)}`, '_blank', 'noopener');
+				} else {
+					onFollow(title);
+				}
 			} else {
-				goto(`/?seed=${encodeURIComponent(seed)}`);
+				window.open(href, '_blank', 'noopener,noreferrer');
 			}
 		};
-		contentEl.addEventListener('click', onClick);
-		return () => contentEl?.removeEventListener('click', onClick);
+		el.addEventListener('click', onClick);
+		return () => el.removeEventListener('click', onClick);
 	});
 
-	// On mobile the reader is a full-screen takeover, so move focus into it on open
-	// and restore it to the trigger on close — otherwise keyboard/SR users are left
-	// behind it, tabbing through hidden feed content. On desktop (lg+) it's a
-	// non-modal in-flow pane beside the feed, so focus stays where it was.
+	// Cosmetic only: tag links so article links get the ember underline (.wh-dive) and
+	// externals the ↗ marker (.wh-external). Runs after the DOM reflects the current
+	// html (tick) so cached Back renders get re-tagged; follow behavior never depends on it.
+	$effect(() => {
+		articleHtml;
+		if (!contentEl) return;
+		tick().then(() => {
+			if (!contentEl) return;
+			for (const a of contentEl.querySelectorAll('a')) {
+				const href = a.getAttribute('href') ?? '';
+				if (href.startsWith('#')) continue;
+				const title = articleTitleFromHref(href);
+				if (title) {
+					a.dataset.seed = title;
+					a.classList.add('wh-dive');
+				} else {
+					a.classList.add('wh-external');
+				}
+			}
+		});
+	});
+
+	// On mobile the reader is a full-screen takeover, so move focus into it on open and
+	// restore it to the trigger on close — otherwise keyboard/SR users are left behind
+	// it. On desktop (lg+) it's a non-modal in-flow pane beside the feed, so focus stays.
 	$effect(() => {
 		if (!asideEl) return;
 		if (window.matchMedia('(min-width: 1024px)').matches) return;
@@ -103,7 +143,10 @@
 
 <svelte:window
 	onkeydown={(e) => {
-		if (e.key === 'Escape') onClose();
+		if (e.key !== 'Escape') return;
+		// A stack makes Escape mean "back" until you're at the root, then "close".
+		if (reader.canGoBack) reader.back();
+		else reader.close();
 	}}
 />
 
@@ -124,17 +167,28 @@
 	<!-- Sticky header. Extra top padding clears the notch when the reader is a
 	     full-screen takeover on mobile (reset on desktop, where it sits below the app bar). -->
 	<div
-		class="z-10 flex items-start gap-3 border-b border-hair bg-surface px-4 sm:px-6
+		class="z-10 flex items-center gap-2 border-b border-hair bg-surface px-4 sm:px-6
 			pt-[calc(0.75rem+env(safe-area-inset-top))] pb-3 lg:pt-3"
 	>
+		{#if reader.canGoBack}
+			<button
+				type="button"
+				onclick={() => reader.back()}
+				aria-label="Back"
+				class="icon-btn -ml-1 inline-flex shrink-0 items-center justify-center rounded-full p-1.5
+					text-muted transition-colors hover:bg-surface-2 hover:text-ink"
+			>
+				<ChevronLeft class="size-5" aria-hidden="true" />
+			</button>
+		{/if}
 		<h2 class="font-display flex-1 text-xl leading-snug font-semibold tracking-tight text-ink">
-			{article.title}
+			{current?.title}
 		</h2>
 		<button
 			type="button"
-			onclick={onClose}
+			onclick={() => reader.close()}
 			aria-label="Close article"
-			class="icon-btn mt-0.5 inline-flex shrink-0 items-center justify-center rounded-full p-1.5
+			class="icon-btn inline-flex shrink-0 items-center justify-center rounded-full p-1.5
 				text-muted transition-colors hover:bg-surface-2 hover:text-ink"
 		>
 			<X class="size-5" aria-hidden="true" />
@@ -144,6 +198,7 @@
 	<!-- Scrollable body. Bottom padding clears the home indicator on mobile. -->
 	<div
 		bind:this={scrollEl}
+		onscroll={() => reader.setScroll(scrollEl?.scrollTop ?? 0)}
 		class="flex-1 overflow-y-auto px-4 pt-6 sm:px-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))]"
 	>
 		{#if htmlLoading}
@@ -156,11 +211,8 @@
 		{:else if htmlError}
 			<p class="text-sm text-faint">
 				Couldn't load the article inline.
-				<a
-					href={article.wikiUrl}
-					target="_blank"
-					rel="noopener noreferrer"
-					class="text-accent hover:underline">Open on Wikipedia instead ↗</a
+				<a href={wikiUrl} target="_blank" rel="noopener noreferrer" class="text-accent hover:underline"
+					>Open on Wikipedia instead ↗</a
 				>
 			</p>
 		{:else if articleHtml}
@@ -168,7 +220,7 @@
 			<div bind:this={contentEl} class="wiki-content">{@html articleHtml}</div>
 			<div class="mt-6 border-t border-hair pt-4">
 				<a
-					href={article.wikiUrl}
+					href={wikiUrl}
 					target="_blank"
 					rel="noopener noreferrer"
 					class="inline-flex items-center py-1 text-xs font-medium text-faint transition-colors hover:text-ink"
