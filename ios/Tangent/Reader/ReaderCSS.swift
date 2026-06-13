@@ -57,7 +57,9 @@ enum ReaderCSS {
 	figure.mw-halign-left, figure.mw-halign-right,
 	.mw-halign-left, .mw-halign-right { float: none; margin-inline: auto; }
 	.thumb { float: none; margin: 1.5em auto; max-width: 100%; text-align: center; }
-	.thumbinner { margin-inline: auto; max-width: 100%; }
+	/* fit-content + !important override the inline width/max-width Wikipedia hard-codes,
+	   so wide thumbs cap to the column and center instead of overflowing left. */
+	.thumbinner { width: fit-content !important; max-width: 100% !important; margin-inline: auto; }
 	.gallerybox, .gallerybox .thumb { margin-inline: auto; text-align: center; }
 	.infobox-image, .infobox-full-data { text-align: center; }
 	.infobox-image .mw-default-size,
