@@ -28,6 +28,12 @@ enum ReaderCSS {
 	  padding: 0.5rem 1.25rem calc(2rem + env(safe-area-inset-bottom));
 	  overflow-wrap: break-word;
 	  word-break: break-word;
+	  /* Backstop against the article panning sideways: any child wider than the column
+	     (an untagged wide table, a fixed-px panorama, a stray graphic) would otherwise let
+	     the whole webview scroll horizontally. Known-wide constructs get their own internal
+	     scroll/wrap below; anything we miss is clipped at the column edge. `clip` (not
+	     `hidden`) keeps overflow-y `visible` so the article still scrolls vertically. */
+	  overflow-x: clip;
 	  -webkit-font-smoothing: antialiased;
 	}
 	p { margin: 0 0 0.9em; }
@@ -55,6 +61,9 @@ enum ReaderCSS {
 	li { margin: 0.25em 0; }
 	ul { list-style: disc; } ol { list-style: decimal; }
 	img, video { max-width: 100%; height: auto; border-radius: 0.5rem; background: var(--surface); }
+	/* Inline data-viz SVGs (graphs, small charts) carry an intrinsic px width that can
+	   exceed the column; cap to the column and scale height to match. */
+	svg { max-width: 100%; height: auto; }
 	video { display: block; margin-inline: auto; }
 	figure { margin: 1.5em auto; max-width: min(100%, 30rem); text-align: center; }
 	figure img, figure video { display: block; margin-inline: auto; }
@@ -87,7 +96,10 @@ enum ReaderCSS {
 	hr { border: 0; border-top: 1px solid var(--hair); margin: 1.4em 0; }
 	sup { font-size: 0.7em; }
 	table {
-	  display: block; max-width: 100%; overflow-x: auto;
+	  /* min-width:0 neutralizes Wikipedia's inline `min-width:60em` on collapsible/wide
+	     tables — it beats max-width:100% otherwise, forcing the box ~960px wide so
+	     overflow-x:auto has nothing to scroll and the column just pans sideways. */
+	  display: block; max-width: 100%; min-width: 0 !important; overflow-x: auto;
 	  border-collapse: collapse; font-size: 0.85rem; margin: 1em 0;
 	}
 	th, td { border: 1px solid var(--hair); padding: 0.35em 0.6em; text-align: left; vertical-align: top; }
@@ -290,5 +302,29 @@ enum ReaderCSS {
 	   is the one cell allowed to wrap. No engine divergence (unlike wh-climate's sticky). */
 	table.wh-wide th, table.wh-wide td { white-space: nowrap; }
 	table.wh-wide th[colspan], table.wh-wide td[colspan] { white-space: normal; }
+
+	/* Untagged wide constructs (mirror of src/app.css): Wikipedia widgets that ship a
+	   fixed/intrinsic width with no column-cap of their own, so each blows past the column.
+	   Scroll the wide ones, wrap the tiled ones, cap the rest — so the body clip backstop
+	   rarely has to swallow real content. */
+	/* Code / pseudocode (<pre>): white-space:pre can't wrap, so a long line runs off the
+	   column. Scroll it, and dress it as a code card with a mono stack (the serif is wrong). */
+	pre {
+	  max-width: 100%; overflow-x: auto;
+	  font-family: ui-monospace, Menlo, Courier, monospace; font-size: 0.8rem; line-height: 1.5;
+	  background: var(--surface2); border: 1px solid var(--hair);
+	  border-radius: 0.5rem; padding: 0.75rem 0.9rem;
+	}
+	/* Image galleries (<ul class="gallery">): reflow the fixed-width tiles into a centered
+	   wrapping row so they fit the column instead of stacking at content width. */
+	ul.gallery { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; padding-left: 0; list-style: none; }
+	li.gallerybox { max-width: 100%; }
+	/* Legacy float boxes ({{float}}, .floatleft/.floatright) carry a fixed width and a float
+	   our mw-halign reset doesn't cover — drop the float and center within the column. */
+	.floatleft, .floatright { float: none; max-width: 100%; margin: 1em auto; }
+	/* Bar charts ({{Bar box}}, div.barbox) and fixed-px wide-image / panorama wrappers
+	   (div.noresize, e.g. {{Wide image}}) ship an inline pixel width built for desktop — cap
+	   to the column and scroll horizontally so they stay viewable by panning. */
+	.barbox, div.noresize { max-width: 100%; overflow-x: auto; }
 	"""
 }

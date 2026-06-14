@@ -372,6 +372,15 @@ body::before {
 	line-height: 1.75;
 	overflow-wrap: break-word;
 	word-break: break-word;
+	/* Backstop against a whole-pane horizontal scrollbar. The reader body is
+	   `overflow-y:auto`, which per spec resolves overflow-x to `auto` too — so any
+	   child wider than the column (an untagged wide table, a fixed-px panorama, a
+	   stray graphic we don't recognize) would scroll the entire pane sideways. Clip
+	   here so that never happens: known-wide constructs get their own internal
+	   scroll/wrap below; anything we miss is clipped at the column edge rather than
+	   blowing out the layout. `clip` (not `hidden`) keeps overflow-y `visible` —
+	   `hidden` would force it to `auto` and create an unwanted nested scroller. */
+	overflow-x: clip;
 }
 .wiki-content p {
 	margin: 0 0 0.9em;
@@ -559,10 +568,16 @@ body::before {
 .wiki-content sup {
 	font-size: 0.7em;
 }
-/* Tables (incl. infoboxes) scroll horizontally instead of blowing out the card. */
+/* Tables (incl. infoboxes) scroll horizontally instead of blowing out the card.
+   `min-width:0` neutralizes Wikipedia's inline `min-width:60em` (collapsible/wide
+   data tables): an inline min-width beats our `max-width:100%`, so without this the
+   table box is forced ~960px wide and `overflow-x:auto` has nothing to scroll — it
+   just pushes the whole column sideways. Reset it so the box clamps to the column
+   and the content scrolls within. `!important` to outrank the inline declaration. */
 .wiki-content table {
 	display: block;
 	max-width: 100%;
+	min-width: 0 !important;
 	overflow-x: auto;
 	border-collapse: collapse;
 	font-size: 0.85rem;
@@ -588,7 +603,13 @@ body::before {
  * table reads as a full-width dark-theme table once opened.
  */
 .wiki-content .quick-facts {
-	margin: 1.4em 0;
+	/* A label/value fact table reads as an infobox, not a full-bleed data grid —
+	   cap it to a compact card (Wikipedia's infoboxes sit near 22em) and center it,
+	   so on the wide desktop pane the values don't float in a sea of dead space
+	   beside their labels. On a narrow column (<24rem) max-width yields to the
+	   column, so it stays full-width on mobile. */
+	max-width: 24rem;
+	margin: 1.4em auto;
 	border: 1px solid var(--color-hair);
 	border-radius: var(--radius-card);
 	background: var(--color-surface);
@@ -1251,4 +1272,71 @@ body::before {
 .wiki-content table.wh-wide th[colspan],
 .wiki-content table.wh-wide td[colspan] {
 	white-space: normal;
+}
+
+/*
+ * Untagged wide constructs. The graphics above are recognized and reflowed server-side;
+ * these are the remaining Wikipedia widgets that ship a fixed/intrinsic width with no
+ * column-cap of their own, so each blows past the column on a narrow read. Give each the
+ * same treatment as its tagged cousins — scroll the wide ones, wrap the tiled ones, cap
+ * the rest — so the `.wiki-content` clip backstop rarely has to swallow real content.
+ * iOS ReaderCSS.swift has the same gaps and needs these mirrored.
+ */
+
+/* Code / pseudocode blocks (<pre>): `white-space:pre` can't wrap, so a long line runs off
+   the column with no scroll. Scroll it, and dress it as a code card on the dark surface —
+   the inherited reading serif is wrong for code, so force a mono stack. */
+.wiki-content pre {
+	max-width: 100%;
+	overflow-x: auto;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 0.8rem;
+	line-height: 1.5;
+	background: var(--color-surface-2);
+	border: 1px solid var(--color-hair);
+	border-radius: 0.5rem;
+	padding: 0.75rem 0.9rem;
+}
+
+/* Image galleries (<ul class="gallery">): MediaWiki tiles fixed-width <li> thumbs that,
+   without its stylesheet, stack at content width and overrun the column. Reflow them as a
+   centered wrapping row so the tiles fit the column. */
+.wiki-content ul.gallery {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 0.5rem;
+	padding-left: 0;
+	list-style: none;
+}
+.wiki-content li.gallerybox {
+	max-width: 100%;
+}
+
+/* Inline data-viz SVGs (graphs, small charts) carry an intrinsic px width that can exceed
+   the column. Cap to the column and scale height to match. (Recognized chart wrappers like
+   .enwiki-chart already cap their own svg; this nets the rest.) */
+.wiki-content svg {
+	max-width: 100%;
+	height: auto;
+}
+
+/* Legacy float boxes ({{float}} and kin: .floatleft / .floatright) carry a fixed width and
+   a float our Parsoid mw-halign reset doesn't cover. Drop the float and center within the
+   column, matching the figure/thumb treatment. */
+.wiki-content .floatleft,
+.wiki-content .floatright {
+	float: none;
+	max-width: 100%;
+	margin: 1em auto;
+}
+
+/* Bar charts ({{Bar box}}, div.barbox) and fixed-px wide-image / panorama wrappers
+   (div.noresize, e.g. {{Wide image}}) ship an inline pixel width built for the desktop
+   page. Cap to the column and scroll horizontally so the bars / the panorama stay fully
+   viewable by panning, instead of being clipped by the backstop. */
+.wiki-content .barbox,
+.wiki-content div.noresize {
+	max-width: 100%;
+	overflow-x: auto;
 }
