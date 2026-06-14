@@ -10,9 +10,17 @@
 	import { trailPanel } from '$lib/feed/trailPanel.svelte';
 	import { auth } from '$lib/auth/authState.svelte';
 	import { syncOnInit, pushProfile } from '$lib/auth/sync';
+	import { theme } from '$lib/theme/theme.svelte';
 	import { onMount } from 'svelte';
 
 	let { children } = $props();
+
+	// Reflect the resolved theme onto <html> (data-theme + chrome tint). Reads reactive
+	// state via apply(), so it re-runs when the preference or the OS color-scheme changes.
+	// The inline no-flash script in app.html already set it for first paint.
+	$effect(() => {
+		theme.apply();
+	});
 
 	// Resolve the session once, then sync the profile if signed in (revision-guarded).
 	onMount(() => {

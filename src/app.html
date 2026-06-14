@@ -1,10 +1,39 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en" data-theme="nightstand">
 	<head>
 		<meta charset="utf-8" />
 		<link rel="icon" href="%sveltekit.assets%/favicon.svg" />
 		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 		<meta name="theme-color" content="#15110c" />
+		<!--
+			No-flash theme: resolve the saved preference (or the OS color-scheme for 'system')
+			and set data-theme + the chrome tint BEFORE first paint, so a light-theme reload
+			never flashes the dark default. The store (theme.svelte.ts) takes over after hydration.
+			The bg map mirrors THEMES[].bg — keep in sync when adding a curated theme.
+		-->
+		<script>
+			(function () {
+				try {
+					var pref = localStorage.getItem('tangent:theme:v1') || 'system';
+					if (pref === 'system') {
+						pref = matchMedia('(prefers-color-scheme: dark)').matches ? 'nightstand' : 'daylight';
+					}
+					document.documentElement.dataset.theme = pref;
+					// Chrome tint per theme (mirrors THEMES[].bg). An unknown pref harmlessly
+					// renders the @theme default, and the store re-syncs both at hydration.
+					var bg = {
+						nightstand: '#15110c',
+						daylight: '#f5efe3',
+						sepia: '#f3e8d2',
+						slate: '#15171c',
+						forest: '#0f1410',
+						'high-contrast': '#000000'
+					};
+					var m = bg[pref] && document.querySelector('meta[name="theme-color"]');
+					if (m) m.setAttribute('content', bg[pref]);
+				} catch (e) {}
+			})();
+		</script>
 		<link rel="preconnect" href="https://fonts.googleapis.com" />
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 		<link

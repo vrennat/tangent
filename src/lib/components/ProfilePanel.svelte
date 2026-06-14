@@ -7,6 +7,7 @@
 	import { Atom, Cpu, Landmark, Leaf, Palette, Shuffle, Sparkles } from '@lucide/svelte';
 	import Drawer from './Drawer.svelte';
 	import AccountSection from './AccountSection.svelte';
+	import ThemePicker from './ThemePicker.svelte';
 
 	let { onClose }: { onClose: () => void } = $props();
 
@@ -43,7 +44,10 @@
 <Drawer title="Your interests" closeLabel="Close interests" {onClose}>
 	{#snippet children(close)}
 		<div class="p-4">
-			<p class="mb-3 text-xs font-medium tracking-wide text-faint uppercase">Tangent flavor</p>
+			<p class="mb-3 text-xs font-medium tracking-wide text-faint uppercase">Appearance</p>
+			<ThemePicker />
+
+			<p class="mb-3 mt-5 text-xs font-medium tracking-wide text-faint uppercase">Tangent flavor</p>
 			<div class="grid grid-cols-2 gap-2">
 				{#each TASTE_OPTIONS as option}
 					{@const Icon = tasteIcons[option.id]}

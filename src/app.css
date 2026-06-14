@@ -25,6 +25,8 @@
 	--color-accent-soft: #c8893a;
 	--color-spark: #86b39a;
 	--color-like: #e0644a;
+	/* Error/alert text — a soft red that reads on the dark surfaces (re-toned per theme). */
+	--color-danger: #f3766b;
 
 	/* Newsreader (serif) carries headings and long-form reading; Hanken Grotesk the UI. */
 	--font-display: 'Newsreader', ui-serif, Georgia, 'Times New Roman', serif;
@@ -38,6 +40,134 @@
 html {
 	scroll-behavior: smooth;
 	-webkit-text-size-adjust: 100%;
+	/* Nightstand is dark by default; the daylight block flips this to `light` so native
+	   form controls, scrollbars and the like match. */
+	color-scheme: dark;
+}
+
+/*
+ * Curated themes. The `@theme` block above is the default ("Nightstand", dark) and also
+ * what generates the `bg-*`/`text-*` utilities — each compiles to `var(--color-…)`, so
+ * re-declaring those variables under `:root[data-theme='…']` re-skins the whole app at
+ * runtime, with zero component changes. These blocks are unlayered and specificity (0,2,0),
+ * so they beat the `@theme` defaults (a layered `:root`, 0,1,0) on both counts.
+ *
+ * `nightstand` needs no block — it IS the @theme default. Every text token in a theme must
+ * clear WCAG AA on its own void/surface (verified for Daylight: faint/accent 5.0:1, the floor).
+ *
+ * "Daylight" — Nightstand by day: warm paper, ink-on-cream, the ember darkened so it still
+ * carries contrast on a light page. The light counterpart 'system' resolves to in daylight.
+ */
+:root[data-theme='daylight'] {
+	color-scheme: light;
+
+	--color-void: #f5efe3;
+	--color-surface: #fcf8f0;
+	--color-surface-2: #ece2cf;
+	--color-hair: #e0d5c0;
+	--color-hair-strong: #cdbfa3;
+
+	--color-ink: #2a2218;
+	--color-muted: #6b5d46;
+	--color-faint: #736446;
+	--color-read: #3a3022;
+
+	--color-accent: #9a5410;
+	--color-accent-soft: #85490d;
+	--color-spark: #3a6f53;
+	--color-like: #bd3c26;
+	--color-danger: #b3261e;
+
+	/* The dark theme's near-black drop shadow is far too heavy on paper — a soft warm one. */
+	--shadow-card: 0 8px 24px -16px rgba(60, 45, 20, 0.3);
+}
+
+/* "Sepia" — warmer and book-ier than Daylight: tan parchment, sepia-brown ink, burnt
+   sienna accent. A light theme. (AA floor across text tokens: faint/accent ~4.8:1.) */
+:root[data-theme='sepia'] {
+	color-scheme: light;
+
+	--color-void: #f3e8d2;
+	--color-surface: #f8efdc;
+	--color-surface-2: #e6d7b8;
+	--color-hair: #d9c8a4;
+	--color-hair-strong: #c4ae84;
+
+	--color-ink: #3a2c18;
+	--color-muted: #6f5a38;
+	--color-faint: #75603b;
+	--color-read: #43331d;
+
+	--color-accent: #9a5212;
+	--color-accent-soft: #824510;
+	--color-spark: #3f6f4a;
+	--color-like: #b23a1f;
+	--color-danger: #a82318;
+
+	--shadow-card: 0 8px 24px -16px rgba(70, 50, 20, 0.32);
+}
+
+/* "Slate" — cool neutral dark (blue-grey), with a warm brass accent kept from the brand
+   ember family so it still pops. Dark themes inherit the @theme dark shadow + color-scheme. */
+:root[data-theme='slate'] {
+	--color-void: #15171c;
+	--color-surface: #1d2027;
+	--color-surface-2: #272b34;
+	--color-hair: #323844;
+	--color-hair-strong: #444b59;
+
+	--color-ink: #e6e9ef;
+	--color-muted: #a0a7b4;
+	--color-faint: #8f97a5;
+	--color-read: #c3c9d4;
+
+	--color-accent: #d8a548;
+	--color-accent-soft: #bf8f38;
+	--color-spark: #7fb39c;
+	--color-like: #e0644a;
+	--color-danger: #f3766b;
+}
+
+/* "Forest" — deep green-black, sage-forward, warm gold accent. A dark theme. */
+:root[data-theme='forest'] {
+	--color-void: #0f1410;
+	--color-surface: #16201a;
+	--color-surface-2: #1f2c23;
+	--color-hair: #283a2e;
+	--color-hair-strong: #3a5141;
+
+	--color-ink: #e4ecdf;
+	--color-muted: #9fb0a0;
+	--color-faint: #90a292;
+	--color-read: #c6d4c2;
+
+	--color-accent: #d2a458;
+	--color-accent-soft: #b88e44;
+	--color-spark: #7cc0a0;
+	--color-like: #e2674c;
+	--color-danger: #f3766b;
+}
+
+/* "High Contrast" — accessibility-first: pure black, pure white, bright amber. A dark theme.
+   Every text token clears WCAG AAA (7:1+), and borders are deliberately brighter than other
+   dark themes so structure stays visible. */
+:root[data-theme='high-contrast'] {
+	--color-void: #000000;
+	--color-surface: #0a0a0a;
+	--color-surface-2: #1a1a1a;
+	--color-hair: #4d4d4d;
+	--color-hair-strong: #777777;
+
+	--color-ink: #ffffff;
+	--color-muted: #e0e0e0;
+	--color-faint: #c4c4c4;
+	--color-read: #f5f5f5;
+
+	--color-accent: #ffb000;
+	--color-accent-soft: #e09a00;
+	--color-spark: #5fe0a8;
+	--color-like: #ff8568;
+	--color-danger: #ff8a7a;
 }
 
 @keyframes slide-from-right {

@@ -222,6 +222,6 @@
 	{/if}
 
 	{#if error}
-		<p class="mt-2 text-xs text-red-400" role="alert">{error}</p>
+		<p class="mt-2 text-xs text-danger" role="alert">{error}</p>
 	{/if}
 </div>
