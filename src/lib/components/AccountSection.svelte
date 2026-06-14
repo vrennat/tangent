@@ -153,7 +153,7 @@
 					disabled:cursor-not-allowed disabled:opacity-50"
 			>
 				{#if busy}<LoaderCircle class="size-3.5 animate-spin" aria-hidden="true" />{/if}
-				Send code
+				Send sign-in link
 			</button>
 		</form>
 
@@ -179,7 +179,8 @@
 		{/if}
 	{:else}
 		<p class="mb-2 text-sm text-faint">
-			Enter the 6-digit code sent to <span class="text-muted">{email}</span>.
+			We sent a sign-in link to <span class="text-muted">{email}</span>. Tap it on this device, or
+			enter the code below.
 		</p>
 		<form onsubmit={verify} class="flex flex-col gap-2">
 			<input

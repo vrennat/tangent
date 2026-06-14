@@ -13,7 +13,7 @@ import { sendCode } from '$lib/server/auth/email';
  * probe which emails have accounts. The account is created lazily here; it only becomes
  * verified once the code is consumed.
  */
-export const POST: RequestHandler = async ({ request, platform }) => {
+export const POST: RequestHandler = async ({ request, platform, url }) => {
 	const db = getDb(platform);
 	let email: string;
 	let purpose: CodePurpose;
@@ -27,8 +27,13 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 	if (!isValidEmail(email)) return json({ error: 'invalid email' }, { status: 400 });
 
 	const user = await findOrCreateUserByEmail(db, email);
-	const code = await issueCode(db, user.id, purpose);
-	const { devCode } = await sendCode(platform, user.email, code, purpose);
+	const { code, linkToken } = await issueCode(db, user.id, purpose);
+	// Build the magic link off the request origin so it self-targets: localhost in dev,
+	// tangent.page in prod. The token is the secret; nothing else identifies the row.
+	const link = `${url.origin}/auth/verify?token=${linkToken}`;
+	const { devCode, devLink } = await sendCode(platform, user.email, { code, link }, purpose);
 
-	return json({ ok: true, ...(devCode ? { devCode } : {}) });
+	// devCode/devLink are only ever populated in dev (no email binding) — they let local + tests
+	// complete the flow without an inbox; production returns the bare { ok }.
+	return json({ ok: true, ...(devCode ? { devCode } : {}), ...(devLink ? { devLink } : {}) });
 };

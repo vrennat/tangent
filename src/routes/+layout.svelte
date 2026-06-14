@@ -9,7 +9,7 @@
 	import { feed } from '$lib/feed/feedState.svelte';
 	import { trailPanel } from '$lib/feed/trailPanel.svelte';
 	import { auth } from '$lib/auth/authState.svelte';
-	import { syncOnInit, pushProfile } from '$lib/auth/sync';
+	import { syncOnInit, mergeOnLogin, pushProfile } from '$lib/auth/sync';
 	import { theme } from '$lib/theme/theme.svelte';
 	import { onMount } from 'svelte';
 
@@ -22,10 +22,22 @@
 		theme.apply();
 	});
 
-	// Resolve the session once, then sync the profile if signed in (revision-guarded).
+	// Resolve the session once, then sync the profile if signed in. A magic-link sign-in lands
+	// here as a full nav with ?signin=1 — that's a fresh login, so run the union merge (local +
+	// server) once instead of the steady-state revision-guarded pull, then strip the param so a
+	// reload doesn't re-merge.
 	onMount(() => {
+		const justSignedIn = page.url.searchParams.get('signin') === '1';
 		void auth.refresh().then(() => {
-			if (auth.isAuthed) void syncOnInit();
+			if (!auth.isAuthed) return;
+			if (justSignedIn) {
+				void mergeOnLogin();
+				const clean = new URL(window.location.href);
+				clean.searchParams.delete('signin');
+				window.history.replaceState(window.history.state, '', clean);
+			} else {
+				void syncOnInit();
+			}
 		});
 	});
 

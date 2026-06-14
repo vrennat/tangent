@@ -27,9 +27,16 @@ Web and native iOS share one server-side auth + sync surface.
   `mergePersisted` unions the title sets and takes the per-key **MAX** of token weights /
   doc-freq / dwell (they're capped running sums — summing would double-count the same
   article seen on two devices). Steady-state single-device push is plain last-write-wins.
-- **Tokens never stored in the clear.** Session tokens and email codes are stored as
-  SHA-256 hashes; a DB read leak can't be replayed. Codes are single-use, 10-min TTL,
-  5-attempt cap. Sessions are 90 days, revocable, hashed-token lookup.
+- **Tokens never stored in the clear.** Session tokens, email codes, and magic-link tokens
+  are stored as SHA-256 hashes; a DB read leak can't be replayed. Codes are single-use,
+  10-min TTL, 5-attempt cap. Sessions are 90 days, revocable, hashed-token lookup.
+- **Magic link is primary; the code is the cross-device fallback.** The email leads with a
+  one-tap link (same-device, frictionless) and keeps the 6-digit code for the case the link
+  can't sign in the right device (read it off your phone, type it on the TV). The link token
+  is 256-bit (its bare SHA-256 is unique, looked up directly — no salt, no enumeration); the
+  low-entropy code stays id-salted + attempt-capped. Link is consumed on **POST**, not the
+  GET, so prefetchers/scanners can't spend it. Tokens never travel in the URL except the
+  opaque link token itself (no email/code in query strings).
 - **Cloudflare types are imported, not globally referenced.** A global
   `/// <reference @cloudflare/workers-types />` swaps `Response.json()` to return `unknown`
   and breaks browser fetch typing. Server files import `D1Database` explicitly.
@@ -42,10 +49,16 @@ codes) · `credentials` (WebAuthn passkeys) · `webauthn_challenges` (pending ce
 
 ## API
 
-- `POST /api/auth/request-code` — find-or-create account, mint+send a 6-digit code.
-  Generic `{ ok }` (no account enumeration); `devCode` returned only in dev.
-- `POST /api/auth/verify-code` — verify, mark verified, mint session. Web -> HttpOnly
-  cookie; iOS (`client:'ios'`) -> raw token for the keychain.
+- `POST /api/auth/request-code` — find-or-create account, mint a 6-digit code **and** a
+  high-entropy magic-link token, email both. Generic `{ ok }` (no account enumeration);
+  `devCode`/`devLink` returned only in dev.
+- `GET /auth/verify?token=…` — magic-link landing. The GET only **peeks** (never consumes)
+  so email scanners/prefetchers can't burn the link; the confirm button POSTs back, which
+  consumes the token, verifies the email, mints the session cookie, and 303-redirects to
+  `/?signin=1`. That param tells the layout to run the one-time union merge (the link path is
+  a full nav, so the SPA verify-code merge never fires).
+- `POST /api/auth/verify-code` — manual code entry (the cross-device fallback). Verify, mark
+  verified, mint session. Web -> HttpOnly cookie; iOS (`client:'ios'`) -> raw token.
 - `POST /api/auth/logout` · `GET /api/auth/me`.
 - `GET /api/profile` · `PUT /api/profile` (LWW) · `POST /api/profile/merge` (first login).
 - Passkey (WebAuthn, `@simplewebauthn` v13): `…/passkey/register/{options,verify}` (auth
@@ -76,9 +89,19 @@ codes) · `credentials` (WebAuthn passkeys) · `webauthn_challenges` (pending ce
 
 ## Provisioning status (2026-06-13)
 
-- **Remote D1: DONE.** `tangent-db` created (id `7132ea8c-8a8c-4182-ab34-dabf2202341f`,
-  region WNAM), migration applied `--remote`, all 6 tables verified. `database_id` is in
-  `wrangler.jsonc`.
+- **Remote D1: DONE for 0001.** `tangent-db` created (id `7132ea8c-8a8c-4182-ab34-dabf2202341f`,
+  region WNAM), `0001` applied `--remote`, all 6 tables verified. `database_id` is in
+  `wrangler.jsonc`. **`0002_magic_link.sql` (adds `email_tokens.link_token_hash`) is applied
+  LOCAL only** — it is additive/nullable so it's backward-compatible with the live worker.
+  Order for the next ship: apply `0002 --remote` BEFORE `wrangler deploy` (the new worker
+  SELECTs the column; deploy-first would 500 every request-code).
+- **Magic link + branded email + OG: built + locally verified (not yet deployed).** Magic-link
+  flow tested end-to-end against local D1 (peek-no-consume on GET, single-use consume on POST,
+  replay mints no second session, no-JS 303 fallback). Branded "Nightstand" email (table
+  layout, inline styles, dark color-scheme, accent button = link, code = fallback) — rendering
+  verified in Chrome only; cross-client (Outlook/Apple Mail dark-mode) unverified. OG/Twitter
+  card at `static/og.png` (1200x630, generated from `scripts/og-card.html` via headless Chrome
+  with the real web fonts); absolute-URL meta tags in `app.html`.
 - **Email: native CF Email Sending chosen** (Tanner is on Workers Paid). `send_email` binding
   `EMAIL` (remote:true) wired; `email.ts` targets the Email Service object API (verified).
   **One step left, dashboard-only:** enable Email Sending on tangent.page (Compute → Email
