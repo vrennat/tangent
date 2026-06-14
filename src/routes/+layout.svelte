@@ -161,7 +161,7 @@
 	     start and about pages. -->
 	<footer class="border-t border-hair">
 		<div
-			class="mx-auto flex max-w-2xl flex-wrap items-center gap-x-5 gap-y-2 px-4 py-5 text-xs text-faint"
+			class="mx-auto flex max-w-2xl flex-col gap-3 px-4 py-5 text-xs text-faint sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5 sm:gap-y-2"
 		>
 			<p>
 				Text from
@@ -181,7 +181,7 @@
 				>.
 			</p>
 			<!-- -m/p pairs give these standalone links a 44px touch zone without growing the row. -->
-			<nav class="ml-auto flex items-center gap-5">
+			<nav class="flex items-center gap-5 sm:ml-auto">
 				<a
 					href="/about"
 					class="-mx-1.5 -my-3.5 px-1.5 py-3.5 transition-colors hover:text-muted">About</a

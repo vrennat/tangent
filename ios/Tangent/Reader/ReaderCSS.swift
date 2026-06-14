@@ -91,6 +91,17 @@ enum ReaderCSS {
 	  font-size: 0.8rem; color: var(--faint); margin-top: 0.5em;
 	  text-align: center; line-height: 1.5;
 	}
+	/* {{multiple image}} montages (div.thumb.tmulti) tile photos into rows of fixed-size
+	   crop cells via MediaWiki TemplateStyles we strip — without them the rows linearize
+	   into a ragged vertical stack and the cell crop boxes spill full-size images. Restore
+	   the row/cell flex layout honoring the inline per-cell widths + crop heights; the
+	   .thumbinner rule above centers + caps the whole montage. */
+	.tmulti .trow { display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; }
+	.tmulti .thumbimage { max-width: 100%; }
+	.tmulti .thumbimage img {
+	  width: 100%; height: 100%; object-fit: cover;
+	  margin: 0; border: 0; border-radius: 2px; box-shadow: none;
+	}
 	b, strong { color: var(--ink); }
 	blockquote { margin: 1em 0; padding-left: 1em; border-left: 3px solid var(--hair-strong); color: var(--faint); }
 	hr { border: 0; border-top: 1px solid var(--hair); margin: 1.4em 0; }

@@ -550,6 +550,30 @@ body::before {
 	text-align: center;
 	line-height: 1.5;
 }
+/* {{multiple image}} montages (div.thumb.tmulti) tile several photos into rows of
+   fixed-size crop cells via MediaWiki TemplateStyles we strip — without them the rows
+   linearize into a ragged vertical stack and Tailwind's `height:auto` defeats each
+   cell's fixed-height crop box (so images spill out full-size). Restore the row/cell
+   flex layout, honoring the template's inline per-cell widths + crop heights, so the
+   montage tiles as authored; the generic .thumbinner rule above centers + caps it. */
+.wiki-content .tmulti .trow {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 3px;
+}
+.wiki-content .tmulti .thumbimage {
+	max-width: 100%;
+}
+.wiki-content .tmulti .thumbimage img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	margin: 0;
+	border: 0;
+	border-radius: 2px;
+	box-shadow: none;
+}
 .wiki-content b,
 .wiki-content strong {
 	color: var(--color-ink);
