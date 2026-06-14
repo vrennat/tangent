@@ -97,12 +97,49 @@
 	let landedId = $state<string | null>(null);
 	let landedTimer: ReturnType<typeof setTimeout> | undefined;
 
+	// Closing the reader collapses the two-pane split back to one column by animating
+	// `main`'s max-width (~200ms). Scrolling before that finishes makes the smooth scroll
+	// lock onto a stale target: the cards above the destination are mid-reflow and keep
+	// growing as the column narrows, so the destination slides down out from under the
+	// scroll and lands up to a screen short. Wait for the transition to end before
+	// scrolling. The timeout is a fallback for when no transition fires (reduced motion,
+	// or the column width didn't actually change) so the scroll never hangs.
+	function waitForReaderCollapse(wasOpen: boolean): Promise<void> {
+		if (!wasOpen || !browser) return Promise.resolve();
+		// The two-pane split (and its max-width transition) only exists at lg+; narrow
+		// screens use a full-screen reader that doesn't reflow the feed, and reduced-motion
+		// snaps the column instantly. In both cases there's nothing to wait for, so don't
+		// make the optimistic scroll eat the fallback delay.
+		const willTransition =
+			window.matchMedia('(min-width: 1024px)').matches &&
+			!window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		if (!willTransition) return Promise.resolve();
+		const main = document.querySelector('main');
+		if (!main) return Promise.resolve();
+		return new Promise((resolve) => {
+			let settled = false;
+			const finish = () => {
+				if (settled) return;
+				settled = true;
+				main.removeEventListener('transitionend', onEnd);
+				resolve();
+			};
+			const onEnd = (e: Event) => {
+				if (e.target === main && (e as TransitionEvent).propertyName === 'max-width') finish();
+			};
+			main.addEventListener('transitionend', onEnd);
+			setTimeout(finish, 320);
+		});
+	}
+
 	async function goToCard(id: string) {
 		// Navigating to a card means you want to see that card — close the reader first
 		// (it would otherwise stay open over the destination) and let the layout settle
 		// back to one column before scrolling.
+		const wasReaderOpen = reader.isOpen;
 		reader.close();
 		await tick();
+		await waitForReaderCollapse(wasReaderOpen);
 		document
 			.querySelector(`[data-card="${id}"]`)
 			?.scrollIntoView({ behavior: 'smooth', block: 'start' });
