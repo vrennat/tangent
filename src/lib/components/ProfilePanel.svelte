@@ -4,7 +4,7 @@
 	import { dfWeight } from '$lib/feed/score';
 	import type { TasteId } from '$lib/feed/taste';
 	import { TASTE_OPTIONS } from '$lib/feed/taste';
-	import { Atom, Cpu, Landmark, Leaf, Palette, Shuffle, Sparkles } from '@lucide/svelte';
+	import { Atom, Cpu, Landmark, Leaf, Palette, Shuffle, Sparkles, Users } from '@lucide/svelte';
 	import Drawer from './Drawer.svelte';
 	import AccountSection from './AccountSection.svelte';
 	import ThemePicker from './ThemePicker.svelte';
@@ -18,7 +18,8 @@
 		culture: Palette,
 		science: Atom,
 		history: Landmark,
-		nature: Leaf
+		nature: Leaf,
+		people: Users
 	} satisfies Record<TasteId, typeof Shuffle>;
 
 	// Top 8 tokens sorted by DF-discounted effective weight (mirrors what the engine uses).

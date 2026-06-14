@@ -107,6 +107,33 @@ html {
 	--shadow-card: 0 8px 24px -16px rgba(70, 50, 20, 0.32);
 }
 
+/* "Newsprint" — the cool, neutral light: a crisp gray-white page (not the warm paper of
+   Daylight/Sepia), near-black ink, the brand ember darkened to a coffee brown so it still
+   carries on a cool sheet. AA floor across text tokens: accent 5.3:1 on void (4.67:1
+   worst-case on the slightly darker surface-2). A light theme. */
+:root[data-theme='newsprint'] {
+	color-scheme: light;
+
+	--color-void: #e9e7e1;
+	--color-surface: #f3f2ed;
+	--color-surface-2: #dcdad2;
+	--color-hair: #d0cdc3;
+	--color-hair-strong: #b6b2a6;
+
+	--color-ink: #20222a;
+	--color-muted: #4f5157;
+	--color-faint: #595b61;
+	--color-read: #2f313a;
+
+	--color-accent: #855213;
+	--color-accent-soft: #6f4410;
+	--color-spark: #3d6a52;
+	--color-like: #bb3b27;
+	--color-danger: #b3261e;
+
+	--shadow-card: 0 8px 24px -16px rgba(40, 42, 50, 0.26);
+}
+
 /* "Slate" — cool neutral dark (blue-grey), with a warm brass accent kept from the brand
    ember family so it still pops. Dark themes inherit the @theme dark shadow + color-scheme. */
 :root[data-theme='slate'] {
@@ -145,6 +172,29 @@ html {
 	--color-accent-soft: #b88e44;
 	--color-spark: #7cc0a0;
 	--color-like: #e2674c;
+	--color-danger: #f3766b;
+}
+
+/* "Wine" — deep oxblood dark: a warm claret-black page, rose-tinted ink, a gold accent (warm
+   red, never purple). The moodiest of the set; the "like" red is brightened to a coral so the
+   heart still reads against the wine ground. All text tokens clear AA comfortably (faint 5.9:1,
+   accent 6.6:1 worst-case). A dark theme. */
+:root[data-theme='wine'] {
+	--color-void: #1a1012;
+	--color-surface: #241619;
+	--color-surface-2: #2f1d21;
+	--color-hair: #3d262b;
+	--color-hair-strong: #553740;
+
+	--color-ink: #f0e2e0;
+	--color-muted: #c2a3a6;
+	--color-faint: #b39699;
+	--color-read: #ddc8c8;
+
+	--color-accent: #d99a5a;
+	--color-accent-soft: #c2884a;
+	--color-spark: #7cb39a;
+	--color-like: #ef7a63;
 	--color-danger: #f3766b;
 }
 

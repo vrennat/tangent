@@ -26,8 +26,10 @@ export const THEMES = [
 	{ id: 'nightstand', label: 'Nightstand', mode: 'dark', bg: '#15110c', ink: '#ece4d6', accent: '#e0a14e' },
 	{ id: 'daylight', label: 'Daylight', mode: 'light', bg: '#f5efe3', ink: '#2a2218', accent: '#9a5410' },
 	{ id: 'sepia', label: 'Sepia', mode: 'light', bg: '#f3e8d2', ink: '#3a2c18', accent: '#9a5212' },
+	{ id: 'newsprint', label: 'Newsprint', mode: 'light', bg: '#e9e7e1', ink: '#20222a', accent: '#855213' },
 	{ id: 'slate', label: 'Slate', mode: 'dark', bg: '#15171c', ink: '#e6e9ef', accent: '#d8a548' },
 	{ id: 'forest', label: 'Forest', mode: 'dark', bg: '#0f1410', ink: '#e4ecdf', accent: '#d2a458' },
+	{ id: 'wine', label: 'Wine', mode: 'dark', bg: '#1a1012', ink: '#f0e2e0', accent: '#d99a5a' },
 	{ id: 'high-contrast', label: 'High Contrast', mode: 'dark', bg: '#000000', ink: '#ffffff', accent: '#ffb000' }
 ] as const satisfies readonly Theme[];
 

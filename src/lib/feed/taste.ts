@@ -7,7 +7,8 @@ export type TasteId =
 	| 'culture'
 	| 'science'
 	| 'history'
-	| 'nature';
+	| 'nature'
+	| 'people';
 
 type WeightedPattern = readonly [RegExp, number];
 type FocusTasteId = Exclude<TasteId, 'balanced'>;
@@ -47,6 +48,11 @@ export const TASTE_OPTIONS: readonly { id: TasteId; label: string; description: 
 		id: 'nature',
 		label: 'Nature',
 		description: 'Prefer animals, plants, geography, ecosystems, and geology.'
+	},
+	{
+		id: 'people',
+		label: 'People',
+		description: 'Prefer biographies — leaders, artists, explorers, and notable lives.'
 	}
 ] as const;
 
@@ -94,6 +100,13 @@ const TASTE_PATTERNS: Record<FocusTasteId, WeightedPattern[]> = {
 			1
 		],
 		[/\b(category:)?(animals|plants|biology|geography|ecosystems|geology|wildlife)\b/i, 0.7]
+	],
+	people: [
+		[
+			/\b(biography|born|died|politician|statesman|monarch|king|queen|emperor|empress|president|prime minister|general|admiral|explorer|inventor|philosopher|theologian|novelist|poet|playwright|painter|sculptor|composer|conductor|actor|actress|singer|athlete|activist|revolutionary|saint|aristocrat|nobleman|dynasty|reign)\b/i,
+			1
+		],
+		[/\b(category:)?(\d{3,4} (births|deaths)|people|biography|biographies|writers|artists|musicians|politicians)\b/i, 0.7]
 	]
 };
 
