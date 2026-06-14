@@ -5,47 +5,18 @@ import { tokenize } from '$lib/feed/tokens';
 import type { TasteId } from '$lib/feed/taste';
 import { normalizeTaste } from '$lib/feed/taste';
 import { applySessionDecay } from './decay';
+import { type Persisted, EMPTY_PERSISTED, hydratePersisted } from './persisted';
 
 const STORAGE_KEY = 'tangent:profile:v1';
 
-interface Persisted {
-	likedTitles: string[];
-	clickthroughs: string[];
-	branchedTitles: string[];
-	skippedTitles: string[];
-	engagedTitles: string[];
-	tokenWeights: Record<string, number>;
-	tokenAvoidWeights: Record<string, number>;
-	taste: TasteId;
-	dwellMsByTitle: Record<string, number>;
-	tokenDocFreq: Record<string, number>;
-	seenCount: number;
-	seenForDfTitles: string[];
-}
-
-const EMPTY: Persisted = {
-	likedTitles: [],
-	clickthroughs: [],
-	branchedTitles: [],
-	skippedTitles: [],
-	engagedTitles: [],
-	tokenWeights: {},
-	tokenAvoidWeights: {},
-	taste: 'balanced',
-	dwellMsByTitle: {},
-	tokenDocFreq: {},
-	seenCount: 0,
-	seenForDfTitles: []
-};
-
 function load(): Persisted {
-	if (!browser) return structuredClone(EMPTY);
+	if (!browser) return structuredClone(EMPTY_PERSISTED);
 	try {
 		const raw = localStorage.getItem(STORAGE_KEY);
-		if (!raw) return structuredClone(EMPTY);
-		return { ...structuredClone(EMPTY), ...JSON.parse(raw) };
+		if (!raw) return structuredClone(EMPTY_PERSISTED);
+		return hydratePersisted(JSON.parse(raw));
 	} catch {
-		return structuredClone(EMPTY);
+		return structuredClone(EMPTY_PERSISTED);
 	}
 }
 

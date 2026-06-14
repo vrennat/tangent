@@ -10,5 +10,16 @@
 	"assets": {
 		"binding": "ASSETS",
 		"directory": ".svelte-kit/cloudflare"
-	}
+	},
+	// Accounts: D1 holds users/sessions/passkeys/synced profiles. The `database_id` below
+	// is a placeholder for local dev (Miniflare keys off the binding name); replace it with
+	// the real id from `wrangler d1 create tangent-db` before any remote deploy.
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "tangent-db",
+			"database_id": "00000000-0000-0000-0000-000000000000",
+			"migrations_dir": "migrations"
+		}
+	]
 }
