@@ -6,6 +6,7 @@
 	import { TASTE_OPTIONS } from '$lib/feed/taste';
 	import { Atom, Cpu, Landmark, Leaf, Palette, Shuffle, Sparkles } from '@lucide/svelte';
 	import Drawer from './Drawer.svelte';
+	import AccountSection from './AccountSection.svelte';
 
 	let { onClose }: { onClose: () => void } = $props();
 
@@ -101,6 +102,11 @@
 			{:else}
 				<p class="mt-5 text-sm text-faint">Like or read articles to tune your feed.</p>
 			{/if}
+
+			<!-- Account: sign in to sync the interest vector across devices. -->
+			<div class="mt-4">
+				<AccountSection />
+			</div>
 
 			<!-- Reachable entry to the legal/about surface from the feed itself, since the
 			     page footer sits below an infinite scroll. -->

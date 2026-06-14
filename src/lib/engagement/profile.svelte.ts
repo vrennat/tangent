@@ -46,20 +46,14 @@ class EngagementProfile {
 	// Titles we've already counted in tokenDocFreq — dedupe across the session.
 	#seenForDfTitles = new Set<string>();
 
+	// Sync bookkeeping (read by the account sync scheduler). `#rev` bumps on every mutation
+	// via #save(); `#pushedRev` marks the last rev that's been synced to the server. They
+	// differ exactly when there are local changes the server hasn't seen.
+	#rev = $state(0);
+	#pushedRev = $state(0);
+
 	constructor() {
-		const data = load();
-		this.likedTitles = data.likedTitles;
-		this.clickthroughs = data.clickthroughs;
-		this.tokenWeights = data.tokenWeights;
-		this.tokenAvoidWeights = data.tokenAvoidWeights;
-		this.tokenDocFreq = data.tokenDocFreq;
-		this.taste = normalizeTaste(data.taste);
-		this.seenCount = data.seenCount;
-		this.#engaged = new Set(data.engagedTitles);
-		this.#branched = new Set(data.branchedTitles);
-		this.#skipped = new Set(data.skippedTitles);
-		this.#dwellMs = data.dwellMsByTitle;
-		this.#seenForDfTitles = new Set(data.seenForDfTitles);
+		this.#applyPersisted(load());
 
 		// Once per tab session: decay weights so old interests fade.
 		if (browser && !sessionStorage.getItem(FEED.decayStorageKey)) {
@@ -168,21 +162,41 @@ class EngagementProfile {
 	}
 
 	reset(): void {
-		this.likedTitles = [];
-		this.clickthroughs = [];
-		this.tokenWeights = {};
-		this.tokenAvoidWeights = {};
-		this.tokenDocFreq = {};
-		this.taste = 'balanced';
-		this.seenCount = 0;
-		this.#engaged = new Set();
-		this.#branched = new Set();
-		this.#skipped = new Set();
-		this.#dwellMs = {};
-		this.#seenForDfTitles = new Set();
+		this.#applyPersisted(structuredClone(EMPTY_PERSISTED));
 		// Remove the decay sentinel so the fresh profile gets decayed when the session restarts.
 		if (browser) sessionStorage.removeItem(FEED.decayStorageKey);
 		this.#save();
+	}
+
+	/** Monotonic mutation counter — bumps on every #save(). The sync scheduler watches it. */
+	get rev(): number {
+		return this.#rev;
+	}
+
+	/** True when there are local mutations the server hasn't been sent yet. */
+	get pendingSync(): boolean {
+		return this.#rev !== this.#pushedRev;
+	}
+
+	/** Mark a rev as synced after a successful push. Pass the rev captured at snapshot time
+	 * (not the current one) so edits made during the request still flag as pending. */
+	markPushed(rev: number): void {
+		this.#pushedRev = rev;
+	}
+
+	/** The current persistent profile — the same shape #save() writes. */
+	snapshot(): Persisted {
+		return this.#toPersisted();
+	}
+
+	/**
+	 * Replace local state with a server-provided profile (login merge / cross-device pull).
+	 * Persists it and marks it already-synced so it doesn't echo straight back as a push.
+	 */
+	adopt(data: Persisted): void {
+		this.#applyPersisted(data);
+		this.#save();
+		this.#pushedRev = this.#rev;
 	}
 
 	#bumpTokens(article: Article, delta: number): void {
@@ -230,9 +244,10 @@ class EngagementProfile {
 		);
 	}
 
-	#save(): void {
-		if (!browser) return;
-		const data: Persisted = {
+	/** Serialize current state — public $state AND the private Sets/records — into one blob.
+	 * The single source for both localStorage persistence and the server snapshot. */
+	#toPersisted(): Persisted {
+		return {
 			likedTitles: this.likedTitles,
 			clickthroughs: this.clickthroughs,
 			branchedTitles: [...this.#branched],
@@ -246,8 +261,31 @@ class EngagementProfile {
 			seenCount: this.seenCount,
 			seenForDfTitles: [...this.#seenForDfTitles]
 		};
+	}
+
+	/** Load a blob into state — the inverse of #toPersisted(), repopulating the private
+	 * Sets/records too so adopt()/constructor never leave half-empty history. */
+	#applyPersisted(data: Persisted): void {
+		this.likedTitles = data.likedTitles;
+		this.clickthroughs = data.clickthroughs;
+		this.tokenWeights = data.tokenWeights;
+		this.tokenAvoidWeights = data.tokenAvoidWeights;
+		this.tokenDocFreq = data.tokenDocFreq;
+		this.taste = normalizeTaste(data.taste);
+		this.seenCount = data.seenCount;
+		this.#engaged = new Set(data.engagedTitles);
+		this.#branched = new Set(data.branchedTitles);
+		this.#skipped = new Set(data.skippedTitles);
+		this.#dwellMs = data.dwellMsByTitle;
+		this.#seenForDfTitles = new Set(data.seenForDfTitles);
+	}
+
+	#save(): void {
+		// Bump first so the rev advances even during SSR; the scheduler is browser-only anyway.
+		this.#rev++;
+		if (!browser) return;
 		try {
-			localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+			localStorage.setItem(STORAGE_KEY, JSON.stringify(this.#toPersisted()));
 		} catch {
 			// localStorage full or unavailable — degrade silently, engagement is best-effort.
 		}

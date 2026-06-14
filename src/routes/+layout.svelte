@@ -8,8 +8,27 @@
 	import { reader } from '$lib/reader/readerState.svelte';
 	import { feed } from '$lib/feed/feedState.svelte';
 	import { trailPanel } from '$lib/feed/trailPanel.svelte';
+	import { auth } from '$lib/auth/authState.svelte';
+	import { syncOnInit, pushProfile } from '$lib/auth/sync';
+	import { onMount } from 'svelte';
 
 	let { children } = $props();
+
+	// Resolve the session once, then sync the profile if signed in (revision-guarded).
+	onMount(() => {
+		void auth.refresh().then(() => {
+			if (auth.isAuthed) void syncOnInit();
+		});
+	});
+
+	// Debounced push of local profile edits while signed in. Reads `profile.rev` so it
+	// re-runs on every mutation; the push marks the rev synced, flipping `pendingSync` off.
+	$effect(() => {
+		void profile.rev;
+		if (!auth.isAuthed || !profile.pendingSync) return;
+		const id = setTimeout(() => void pushProfile(), 1500);
+		return () => clearTimeout(id);
+	});
 
 	// Trail = articles you've actually reached (scrolled to / dwelled on). Shown in the
 	// header once there's more than just the seed, so it's reachable without a floating chip.
