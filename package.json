@@ -29,6 +29,8 @@
     "wrangler": "^4.98.0"
   },
   "dependencies": {
-    "@lucide/svelte": "^1.18.0"
+    "@lucide/svelte": "^1.18.0",
+    "@simplewebauthn/browser": "^13.3.0",
+    "@simplewebauthn/server": "^13.3.1"
   }
 }

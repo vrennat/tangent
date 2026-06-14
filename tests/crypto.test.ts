@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+	fromBase64Url,
 	randomCode,
 	randomToken,
 	sha256Hex,
@@ -58,5 +59,12 @@ describe('tokens + ids', () => {
 	it('toBase64Url has no +, /, or = padding', () => {
 		const s = toBase64Url(new Uint8Array([251, 255, 0, 1, 2, 3]));
 		expect(s).not.toMatch(/[+/=]/);
+	});
+
+	it('fromBase64Url round-trips toBase64Url (incl. the +/ -> -_ chars)', () => {
+		for (const bytes of [[251, 255, 0, 1, 2, 3], [0], [], [255, 254, 253, 252]]) {
+			const u = new Uint8Array(bytes);
+			expect([...fromBase64Url(toBase64Url(u))]).toEqual(bytes);
+		}
 	});
 });

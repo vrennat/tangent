@@ -48,7 +48,11 @@ codes) · `credentials` (WebAuthn passkeys) · `webauthn_challenges` (pending ce
   cookie; iOS (`client:'ios'`) -> raw token for the keychain.
 - `POST /api/auth/logout` · `GET /api/auth/me`.
 - `GET /api/profile` · `PUT /api/profile` (LWW) · `POST /api/profile/merge` (first login).
-- Passkey (TODO): `…/passkey/register/{options,verify}`, `…/passkey/login/{options,verify}`.
+- Passkey (WebAuthn, `@simplewebauthn` v13): `…/passkey/register/{options,verify}` (auth
+  required), `…/passkey/login/{options,verify}` (passwordless, discoverable credentials).
+  RP ID/origin derived from the request URL (`localhost` dev, `tangent.page` prod). Challenge
+  stored in D1 keyed by an opaque id the client round-trips; public keys stored base64url.
+  Passkey is a credential ADDED to an email-verified account (no recovery cliff).
 
 `hooks.server.ts` resolves the session (cookie or `Authorization: Bearer`) into
 `locals.user` on every request; the feed works signed-out.
@@ -61,8 +65,14 @@ codes) · `credentials` (WebAuthn passkeys) · `webauthn_challenges` (pending ce
   - Real-browser verified (Chrome on `vite dev`): email login sets an HttpOnly cookie that
     auto-sends on reload (-> signed-in), merge pushed the local 35-token interest vector to
     D1, "Interests synced" indicator correct.
-- **TODO:** passkey (WebAuthn) register/login endpoints + web "add a passkey" UI; iOS native
-  (email code is trivial; passkey = ASAuthorization + AASA — the separate chunk in memory).
+- **DONE (server + web UI) + partially verified** — passkey (WebAuthn): register/login
+  endpoints + "Add a passkey" (signed-in) / "Sign in with a passkey" (signed-out) UI.
+  Curl-verified the options + challenge-storage halves and the auth guard; the UI renders
+  signed-in. **The verify halves (attestation/assertion) need a real authenticator** — can't
+  drive a CDP virtual authenticator from this harness, so test passkey create/use on a device.
+- **TODO:** iOS native (email code is trivial — bearer token in keychain; passkey =
+  ASAuthorization + an `apple-app-site-association` at tangent.page, the separate chunk in
+  memory). Remote provisioning (see below).
 
 ## Open infra items (need Tanner)
 

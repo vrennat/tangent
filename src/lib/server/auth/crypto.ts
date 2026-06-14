@@ -19,6 +19,16 @@ export function toBase64Url(bytes: Uint8Array): string {
 	return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
+/** Decode base64url (padding optional) back to bytes — the inverse of toBase64Url. Returns a
+ * concretely-`ArrayBuffer`-backed view to satisfy @simplewebauthn's `Uint8Array<ArrayBuffer>`. */
+export function fromBase64Url(s: string): Uint8Array<ArrayBuffer> {
+	const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
+	const bin = atob(b64.padEnd(Math.ceil(b64.length / 4) * 4, '='));
+	const out = new Uint8Array(new ArrayBuffer(bin.length));
+	for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+	return out;
+}
+
 /** SHA-256 of a string, hex-encoded. */
 export async function sha256Hex(input: string): Promise<string> {
 	const digest = await crypto.subtle.digest('SHA-256', encoder.encode(input));
