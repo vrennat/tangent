@@ -53,6 +53,23 @@ export async function getUserById(db: D1Database, userId: string): Promise<Sessi
 	return row ? { id: row.id, email: row.email, emailVerified: row.emailVerified === 1 } : null;
 }
 
+/**
+ * Permanently delete an account and everything hanging off it: passkeys, sessions, email
+ * codes, pending WebAuthn challenges, and the synced profile. Children are deleted before
+ * the user row so this is correct whether or not the runtime enforces FK cascades, and the
+ * whole thing runs as one D1 batch (a single transaction) so a deletion is all-or-nothing.
+ */
+export async function deleteUser(db: D1Database, userId: string): Promise<void> {
+	await db.batch([
+		db.prepare('DELETE FROM credentials WHERE user_id = ?').bind(userId),
+		db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId),
+		db.prepare('DELETE FROM email_tokens WHERE user_id = ?').bind(userId),
+		db.prepare('DELETE FROM webauthn_challenges WHERE user_id = ?').bind(userId),
+		db.prepare('DELETE FROM profiles WHERE user_id = ?').bind(userId),
+		db.prepare('DELETE FROM users WHERE id = ?').bind(userId)
+	]);
+}
+
 /** Look up by email without creating. Used at code-verify time so a typo'd or never-requested
  * email can't mint orphan accounts (only request-code creates). */
 export async function getUserByEmail(db: D1Database, rawEmail: string): Promise<SessionUser | null> {

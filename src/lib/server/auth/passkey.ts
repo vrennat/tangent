@@ -130,11 +130,52 @@ export async function touchCredential(db: D1Database, id: string, counter: numbe
 		.run();
 }
 
-/** How many passkeys a user has registered (drives the account UI). */
-export async function countCredentials(db: D1Database, userId: string): Promise<number> {
-	const row = await db
-		.prepare('SELECT COUNT(*) AS n FROM credentials WHERE user_id = ?')
+/** A passkey as surfaced to the account UI (no secrets — public key + counter stay server-side). */
+export interface PasskeyInfo {
+	id: string;
+	label: string | null;
+	deviceType: string | null;
+	backedUp: boolean;
+	createdAt: number;
+	lastUsedAt: number | null;
+}
+
+/** A user's passkeys for display + management (drives the account UI), oldest first. */
+export async function listCredentials(db: D1Database, userId: string): Promise<PasskeyInfo[]> {
+	const rows = await db
+		.prepare(
+			`SELECT id, label, device_type AS deviceType, backed_up AS backedUp,
+			        created_at AS createdAt, last_used_at AS lastUsedAt
+			 FROM credentials WHERE user_id = ? ORDER BY created_at ASC`
+		)
 		.bind(userId)
-		.first<{ n: number }>();
-	return row?.n ?? 0;
+		.all<{
+			id: string;
+			label: string | null;
+			deviceType: string | null;
+			backedUp: number;
+			createdAt: number;
+			lastUsedAt: number | null;
+		}>();
+	return rows.results.map((r) => ({
+		id: r.id,
+		label: r.label,
+		deviceType: r.deviceType,
+		backedUp: r.backedUp === 1,
+		createdAt: r.createdAt,
+		lastUsedAt: r.lastUsedAt
+	}));
+}
+
+/**
+ * Revoke a single passkey. Scoped by user_id so a credential id alone can't delete another
+ * account's passkey. Returns whether a row was actually removed. Email login always remains
+ * as a fallback, so removing the last passkey never locks anyone out.
+ */
+export async function deleteCredential(db: D1Database, id: string, userId: string): Promise<boolean> {
+	const res = await db
+		.prepare('DELETE FROM credentials WHERE id = ? AND user_id = ?')
+		.bind(id, userId)
+		.run();
+	return (res.meta?.changes ?? 0) > 0;
 }
