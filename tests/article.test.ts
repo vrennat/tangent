@@ -222,4 +222,12 @@ describe('sanitizeArticleHtml — chart-tree wrapping', () => {
 		);
 		expect(out).not.toContain('wh-chart');
 	});
+
+	it('does not wrap a classless separate-collapse table without margin:0 auto (e.g. periodic table)', () => {
+		const out = sanitizeArticleHtml(
+			'<table style="border-spacing:1px; border-collapse:separate;"><tbody>' +
+				'<tr><td style="border:0px solid; border-width:1px">H</td><td>He</td></tr></tbody></table>'
+		);
+		expect(out).not.toContain('wh-chart');
+	});
 });

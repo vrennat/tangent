@@ -245,8 +245,10 @@ function reflowClimateTables(html: string): string {
  * on spacer cells. The relationships ARE that connector geometry — there's no semantic structure
  * to reflow — so we preserve the authored layout and make it mobile-usable: wrap it in a
  * horizontal-scroll div and tag it `wh-chart` so CSS can reset the generic cell mesh (letting
- * only the inline connectors show) and darken light-background boxes. The classless +
- * separate-collapse signature plus the connector idiom keeps navboxes/data tables out.
+ * only the inline connectors show) and darken light-background boxes. The full {{Chart}}
+ * signature — classless + `border-collapse:separate` + `margin: 0 auto` in the table's own style
+ * — plus a connector cell in the body keeps data tables out: the periodic table, for one, is a
+ * classless separate-collapse table too, but uses `border-spacing:1px` with no centring margin.
  */
 function reflowChartTrees(html: string): string {
 	const OPEN = /<table\b(?![^>]*\bclass=)[^>]*\bstyle="[^"]*border-collapse:\s*separate[^"]*"[^>]*>/gi;
@@ -260,7 +262,7 @@ function reflowChartTrees(html: string): string {
 		const end = matchingTableEnd(html, start);
 		if (end === -1) continue;
 		const body = html.slice(openEnd, end);
-		if (CONNECTOR.test(body)) {
+		if (/margin:\s*0 auto/.test(m[0]) && CONNECTOR.test(body)) {
 			out.push(
 				html.slice(cursor, start),
 				'<div class="wh-chart-scroll">',
