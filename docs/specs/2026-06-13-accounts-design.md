@@ -74,11 +74,18 @@ codes) · `credentials` (WebAuthn passkeys) · `webauthn_challenges` (pending ce
   ASAuthorization + an `apple-app-site-association` at tangent.page, the separate chunk in
   memory). Remote provisioning (see below).
 
-## Open infra items (need Tanner)
+## Provisioning status (2026-06-13)
 
-1. `wrangler d1 create tangent-db` (remote) — on the confirm-first list. Local dev works
-   today against Miniflare; the `database_id` in `wrangler.jsonc` is a placeholder.
-2. Email transport for prod: Cloudflare Email Sending is **Workers Paid plan** only and
-   needs tangent.page onboarded (auto SPF/DKIM/DMARC). If not on Paid, fall back to Resend
-   free tier (one external dep). Dev surfaces the code in-response, so this gates prod only.
-3. Passkey RP ID = `tangent.page`; iOS needs an `apple-app-site-association` at the domain.
+- **Remote D1: DONE.** `tangent-db` created (id `7132ea8c-8a8c-4182-ab34-dabf2202341f`,
+  region WNAM), migration applied `--remote`, all 6 tables verified. `database_id` is in
+  `wrangler.jsonc`.
+- **Email: native CF Email Sending chosen** (Tanner is on Workers Paid). `send_email` binding
+  `EMAIL` (remote:true) wired; `email.ts` targets the Email Service object API (verified).
+  **One step left, dashboard-only:** enable Email Sending on tangent.page (Compute → Email
+  Service → Email Sending → Onboard Domain → tangent.page; adds SPF/DKIM/DMARC — tangent.page
+  has none today, so no conflict). The beta `wrangler email sending enable` endpoint 404s on
+  4.98/4.100, so the CLI can't do it. Other zones (cresset.app, birdup.net) are already enabled.
+- **Deploy:** not done. `bun run build` passes for Workers. Deploy is `bunx wrangler deploy`
+  from this branch (or merge to main first) — separate, confirm-first.
+- **Passkey** RP ID = `tangent.page`; verify halves need a real authenticator (device test).
+- **iOS client: deferred to backlog** (per Tanner, 2026-06-13).
