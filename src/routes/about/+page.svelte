@@ -64,17 +64,18 @@
 	</section>
 
 	<section class="space-y-3">
-		<h2 class="text-sm font-semibold tracking-widest text-faint uppercase">Your privacy</h2>
+		<h2 class="text-sm font-semibold tracking-widest text-faint uppercase">Accounts &amp; privacy</h2>
 		<p class="leading-relaxed text-muted">
-			There are no accounts, no analytics, no tracking, and no advertising cookies. Tangent doesn't
-			build a profile of you on a server — the interests that tune your feed and the trail you
-			leave both live only in your browser's local storage, and you can wipe them anytime from the
-			interests panel or by clearing the site's data.
+			Tangent works fully without an account — the interests that tune your feed and the trail you
+			leave live in your browser by default, and you can wipe them anytime from the interests panel.
+			There are no ads and no tracking cookies; any usage Tangent measures is anonymous and
+			aggregate, never tied to you.
 		</p>
 		<p class="leading-relaxed text-muted">
-			To fetch articles, your searches and the topics you open are sent to Tangent's server (hosted
-			on Cloudflare), which relays them to Wikipedia. Those requests aren't stored or tied to you,
-			though standard network logs may be processed by the host to serve and protect the site.
+			Signing in is optional. If you do — with an email link, a one-time code, or a passkey — Tangent
+			stores your email, a synced copy of that interests list, and any passkeys you add, so your feed
+			can follow you across devices. Deleting your account erases all of it. The specifics are in the
+			<a href="/terms" class={linkClass}>Terms &amp; Privacy</a>.
 		</p>
 	</section>
 
@@ -83,7 +84,8 @@
 		<p class="leading-relaxed text-muted">
 			Tangent is free and provided as-is, with no warranty of any kind. Article content reflects
 			Wikipedia at the moment you load it; its accuracy, completeness, and tone are Wikipedia's, not
-			ours. Use it at your own discretion, and the project may change or go offline at any time.
+			ours. Use it at your own discretion, and the project may change or go offline at any time. The
+			full <a href="/terms" class={linkClass}>Terms &amp; Privacy</a> cover the rest.
 		</p>
 	</section>
 

@@ -12,6 +12,7 @@
 	import ArticleReader from '$lib/components/ArticleReader.svelte';
 	import TrailPanel from '$lib/components/TrailPanel.svelte';
 	import SkeletonCard from '$lib/components/SkeletonCard.svelte';
+	import ActionHint from '$lib/components/ActionHint.svelte';
 
 	const seedParam = $derived(page.url.searchParams.get('seed'));
 
@@ -210,6 +211,7 @@
 	</div>
 {:else}
 	<div class="space-y-5">
+		<ActionHint />
 		{#each feed.cards as card (card.id)}
 			{@const sourceId = sourceIdByCard.get(card.id)}
 			<div data-card={card.id} class="scroll-mt-20" class:wh-land={card.id === landedId}>

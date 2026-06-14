@@ -7,6 +7,7 @@ import { rpConfig } from '$lib/server/auth/webauthnConfig';
 import { consumeChallenge, getCredentialById, touchCredential } from '$lib/server/auth/passkey';
 import { getUserById } from '$lib/server/auth/users';
 import { createSession, SESSION_COOKIE, SESSION_COOKIE_OPTS } from '$lib/server/auth/session';
+import { recordEvent } from '$lib/server/metrics';
 
 /**
  * POST /api/auth/passkey/login/verify — finish a passkey sign-in. Body:
@@ -57,6 +58,7 @@ export const POST: RequestHandler = async ({ platform, url, request, cookies }) 
 
 	const client = body.client === 'ios' ? 'ios' : 'web';
 	const { token, expiresAt } = await createSession(db, user.id, client);
+	recordEvent(platform, 'sign_in', ['passkey']);
 	if (client === 'ios') return json({ ok: true, user, token, expiresAt });
 	cookies.set(SESSION_COOKIE, token, SESSION_COOKIE_OPTS);
 	return json({ ok: true, user });

@@ -8,6 +8,7 @@ import {
 	type Theme,
 	type ThemePreference
 } from './themes';
+import { track } from '$lib/metrics';
 
 const STORAGE_KEY = 'tangent:theme:v1';
 const SYSTEM_QUERY = '(prefers-color-scheme: dark)';
@@ -67,6 +68,7 @@ class ThemeStore {
 		} catch {
 			// Best-effort persistence; the in-memory preference still applies this session.
 		}
+		track('theme_change', { theme: preference });
 	}
 
 	/** Reflect the resolved theme onto the document. Reactive — call inside an `$effect`. */

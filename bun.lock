@@ -5,6 +5,8 @@
     "": {
       "name": "wormhole",
       "dependencies": {
+        "@fontsource/hanken-grotesk": "^5.2.8",
+        "@fontsource/newsreader": "^5.2.10",
         "@lucide/svelte": "^1.18.0",
         "@simplewebauthn/browser": "^13.3.0",
         "@simplewebauthn/server": "^13.3.1",
@@ -101,6 +103,10 @@
     "@esbuild/win32-ia32": ["@esbuild/win32-ia32@0.27.3", "", { "os": "win32", "cpu": "ia32" }, "sha512-QLKSFeXNS8+tHW7tZpMtjlNb7HKau0QDpwm49u0vUp9y1WOF+PEzkU84y9GqYaAVW8aH8f3GcBck26jh54cX4Q=="],
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.27.3", "", { "os": "win32", "cpu": "x64" }, "sha512-4uJGhsxuptu3OcpVAzli+/gWusVGwZZHTlS63hh++ehExkVT8SgiEf7/uC/PclrPPkLhZqGgCTjd0VWLo6xMqA=="],
+
+    "@fontsource/hanken-grotesk": ["@fontsource/hanken-grotesk@5.2.8", "", {}, "sha512-J/e6hdfNCbyc4WK5hmZtk0zjaIsFx3pvCdPVxY25iYw2C9v1ZggGz4nfHnRjMhcz4WfaadUuwLNtvj8sQ70tkg=="],
+
+    "@fontsource/newsreader": ["@fontsource/newsreader@5.2.10", "", {}, "sha512-TFaYzoFhDqarUyV2yYjgZZEwT4bpaj6sGBnXSnFknQ/QB8/9LzfY6IO9+inHOX4zzPp87Z7/KuG1OI5gr91Q3A=="],
 
     "@hexagon/base64": ["@hexagon/base64@1.1.28", "", {}, "sha512-lhqDEAvWixy3bZ+UOYbPwUbBkwBq5C1LAJ/xPC8Oi+lL54oyakv/npbA0aU2hgCsx/1NUd4IBvV03+aUBWxerw=="],
 

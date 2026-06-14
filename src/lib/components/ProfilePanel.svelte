@@ -123,6 +123,11 @@
 					class="-mx-1.5 -my-3.5 px-1.5 py-3.5 transition-colors hover:text-muted">About</a
 				>
 				<a
+					href="/terms"
+					onclick={() => close()}
+					class="-mx-1.5 -my-3.5 px-1.5 py-3.5 transition-colors hover:text-muted">Terms</a
+				>
+				<a
 					href="https://github.com/vrennat/tangent"
 					target="_blank"
 					rel="noopener noreferrer"

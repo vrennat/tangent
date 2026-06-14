@@ -4,6 +4,7 @@ import { getDb } from '$lib/server/db';
 import { peekLinkToken, consumeLinkToken } from '$lib/server/auth/emailCode';
 import { markEmailVerified } from '$lib/server/auth/users';
 import { createSession, SESSION_COOKIE, SESSION_COOKIE_OPTS } from '$lib/server/auth/session';
+import { recordEvent } from '$lib/server/metrics';
 
 /**
  * Magic-link landing. The GET only PEEKS the token (never consumes it) so email scanners /
@@ -30,6 +31,7 @@ export const actions: Actions = {
 
 		await markEmailVerified(db, consumed.userId);
 		const { token: sessionToken } = await createSession(db, consumed.userId, 'web');
+		recordEvent(platform, 'sign_in', ['magic_link']);
 		cookies.set(SESSION_COOKIE, sessionToken, SESSION_COOKIE_OPTS);
 
 		// ?signin=1 tells the layout this was a fresh login -> run the union profile merge

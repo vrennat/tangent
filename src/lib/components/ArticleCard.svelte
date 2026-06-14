@@ -3,6 +3,8 @@
 	import { Star, CirclePlus, LoaderCircle, ArrowRight } from '@lucide/svelte';
 	import { FEED } from '$lib/feed/config';
 	import { profile } from '$lib/engagement/profile.svelte';
+	import { track } from '$lib/metrics';
+	import { actionHint } from '$lib/feed/hint.svelte';
 	import ConnectionBreadcrumb from './ConnectionBreadcrumb.svelte';
 
 	let {
@@ -37,7 +39,9 @@
 	async function branch() {
 		if (branching) return;
 		interacted = true;
+		actionHint.dismiss();
 		profile.recordBranch(article);
+		track('branch', { title: article.title });
 		branching = true;
 		try {
 			await onBranch(card);
@@ -48,13 +52,18 @@
 
 	function read() {
 		interacted = true;
+		actionHint.dismiss();
 		profile.recordClickthrough(article);
+		track('article_opened', { title: article.title });
 		onRead(card);
 	}
 
 	function toggleLike() {
 		interacted = true;
+		actionHint.dismiss();
 		profile.toggleLike(article);
+		// Count the like, not the unlike — track only when it flips on.
+		if (profile.isLiked(article.title)) track('like', { title: article.title });
 	}
 
 	// Tapping anywhere on the card (except buttons/links) opens the reader.
@@ -85,6 +94,7 @@
 			!interacted
 		) {
 			profile.recordSkip(article);
+			track('skip', { title: article.title });
 		}
 	}
 

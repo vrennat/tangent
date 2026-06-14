@@ -4,6 +4,7 @@ import { getDb } from '$lib/server/db';
 import { getUserByEmail, isValidEmail, markEmailVerified } from '$lib/server/auth/users';
 import { verifyCode } from '$lib/server/auth/emailCode';
 import { createSession, SESSION_COOKIE, SESSION_COOKIE_OPTS } from '$lib/server/auth/session';
+import { recordEvent } from '$lib/server/metrics';
 
 /**
  * POST /api/auth/verify-code — body { email, code, client? }.
@@ -38,6 +39,7 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
 	await markEmailVerified(db, user.id);
 	const { token, expiresAt } = await createSession(db, user.id, client);
 	const account = { id: user.id, email: user.email, emailVerified: true };
+	recordEvent(platform, 'sign_in', ['code']);
 
 	if (client === 'ios') {
 		return json({ ok: true, user: account, token, expiresAt });

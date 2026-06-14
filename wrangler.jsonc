@@ -23,5 +23,8 @@
 	// Native Cloudflare Email Sending — delivers login/recovery codes. `remote: true` lets
 	// `wrangler dev` reach the real Email Service. Requires tangent.page onboarded to Email
 	// Sending in the dashboard (auto-adds SPF/DKIM/DMARC); the `from` is login@tangent.page.
-	"send_email": [{ "name": "EMAIL", "remote": true }]
+	"send_email": [{ "name": "EMAIL", "remote": true }],
+	// Analytics Engine — anonymous, aggregate product metrics (events + non-identifying dimensions).
+	"observability": { "enabled": true, "head_sampling_rate": 1 },
+	"analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "tangent_metrics" }]
 }

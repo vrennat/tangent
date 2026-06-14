@@ -1,5 +1,15 @@
 <script lang="ts">
 	import '../app.css';
+	// Self-hosted fonts (Fontsource) — no third-party Google Fonts request, so no visitor IP
+	// leaves for Google on load. Family names match the @theme tokens ('Hanken Grotesk',
+	// 'Newsreader'), so nothing else changes; weights mirror the old Google Fonts query.
+	import '@fontsource/hanken-grotesk/400.css';
+	import '@fontsource/hanken-grotesk/500.css';
+	import '@fontsource/hanken-grotesk/600.css';
+	import '@fontsource/newsreader/400.css';
+	import '@fontsource/newsreader/500.css';
+	import '@fontsource/newsreader/600.css';
+	import '@fontsource/newsreader/400-italic.css';
 	import { page } from '$app/state';
 	import BrandMark from '$lib/components/BrandMark.svelte';
 	import ProfilePanel from '$lib/components/ProfilePanel.svelte';
@@ -175,6 +185,10 @@
 				<a
 					href="/about"
 					class="-mx-1.5 -my-3.5 px-1.5 py-3.5 transition-colors hover:text-muted">About</a
+				>
+				<a
+					href="/terms"
+					class="-mx-1.5 -my-3.5 px-1.5 py-3.5 transition-colors hover:text-muted">Terms</a
 				>
 				<a
 					href="https://github.com/vrennat/tangent"
