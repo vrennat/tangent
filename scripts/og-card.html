@@ -1,0 +1,127 @@
+<!doctype html>
+<!--
+  Source for the Open Graph / Twitter share card -> static/og.png (1200x630).
+  Rendered with the real web fonts via the Chrome CLI binary (rsvg-convert would substitute
+  Newsreader/Hanken and look off-brand). Regenerate after editing:
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+      --headless=new --disable-gpu --hide-scrollbars \
+      --virtual-time-budget=4000 \
+      --window-size=1200,630 \
+      --screenshot="$PWD/static/og.png" \
+      "file://$PWD/scripts/og-card.html"
+
+  Palette + type mirror the app's "Nightstand" theme (src/app.css @theme).
+-->
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap"
+			rel="stylesheet"
+		/>
+		<style>
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+			}
+			html,
+			body {
+				width: 1200px;
+				height: 630px;
+			}
+			body {
+				position: relative;
+				background-color: #15110c;
+				/* Lamplight wash from the top — the app's body::before, sized to the card. */
+				background-image: radial-gradient(
+					1200px 760px at 50% -12%,
+					rgba(224, 161, 78, 0.09),
+					transparent 60%
+				);
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				justify-content: center;
+				font-family: 'Hanken Grotesk', sans-serif;
+				overflow: hidden;
+			}
+			.lockup {
+				display: flex;
+				align-items: center;
+				gap: 28px;
+			}
+			.mark {
+				width: 132px;
+				height: 132px;
+			}
+			.wordmark {
+				font-family: 'Newsreader', serif;
+				font-weight: 600;
+				font-size: 132px;
+				line-height: 1;
+				letter-spacing: -0.03em;
+				color: #ece4d6;
+			}
+			.tagline {
+				margin-top: 40px;
+				font-family: 'Newsreader', serif;
+				font-weight: 500;
+				font-size: 40px;
+				line-height: 1.2;
+				color: #cdbfa6;
+			}
+			.url {
+				position: absolute;
+				bottom: 44px;
+				left: 50%;
+				transform: translateX(-50%);
+				font-family: 'Hanken Grotesk', sans-serif;
+				font-weight: 500;
+				font-size: 24px;
+				letter-spacing: 0.06em;
+				color: #9b8f76;
+			}
+			.frame {
+				position: absolute;
+				inset: 24px;
+				border: 1px solid #342d22;
+				border-radius: 22px;
+				pointer-events: none;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="frame"></div>
+		<div class="lockup">
+			<!-- Brand mark: S-curve (the path you were on) in ink, with the ember tangent line
+			     and touch-point dot — the moment you go off on one. -->
+			<svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+				<path
+					d="M 2 28 C 2 4, 14 4, 18 16 C 22 28, 26 28, 30 8"
+					fill="none"
+					stroke="#ece4d6"
+					stroke-width="2.5"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+				/>
+				<line
+					x1="0"
+					y1="2"
+					x2="32"
+					y2="19"
+					stroke="#e0a14e"
+					stroke-width="2"
+					stroke-linecap="round"
+				/>
+				<circle cx="13" cy="9" r="2.2" fill="#e0a14e" />
+			</svg>
+			<span class="wordmark">tangent</span>
+		</div>
+		<p class="tagline">Fall down a Wikipedia rabbit hole.</p>
+		<span class="url">tangent.page</span>
+	</body>
+</html>
