@@ -744,3 +744,223 @@ body::before {
 .wiki-content .switcher-container > .center ~ .center {
 	display: none;
 }
+
+/*
+ * Cladograms ({{Clade}}) — nested <table class="clade"> (in <div class="clade">) whose
+ * L-shaped connectors are border-left/border-bottom on the label cells, drawn in
+ * currentColor. That lives only in the stripped TemplateStyles, and our generic table rules
+ * (display:block, border-collapse:collapse, td borders + padding) would flatten the tree —
+ * so we scroll the wrapper for wide trees (Wikipedia's own Minerva move), restore table
+ * layout, clear the generic cell chrome, and re-inject the cell rules adapted from
+ * Clade/styles.css (connector colour left as currentColor → our warm read tone on the dark
+ * column). Mirrored in iOS ReaderCSS.swift.
+ */
+.wiki-content div.clade {
+	max-width: 100%;
+	overflow-x: auto;
+	overflow-y: hidden;
+}
+.wiki-content table.clade {
+	display: table;
+	width: auto;
+	border-collapse: separate;
+	border-spacing: 0;
+	margin: 0;
+	font-size: 0.8rem;
+	line-height: 1;
+	/* Keep leaf labels on one line so the tree takes its natural width and the wrapper
+	   scrolls, instead of auto-layout squeezing deep leaves into vertical letter-stacks. */
+	white-space: nowrap;
+}
+.wiki-content table.clade table.clade {
+	width: 100%;
+	line-height: inherit;
+}
+.wiki-content table.clade td {
+	border: 0;
+	padding: 0;
+	background: none;
+}
+.wiki-content table.clade td.clade-label {
+	min-width: 0.7em;
+	width: 0.7em;
+	padding: 0.1em 0.25em;
+	vertical-align: bottom;
+	text-align: center;
+	white-space: nowrap;
+	border-left: 1px solid;
+	border-bottom: 1px solid;
+}
+.wiki-content table.clade td.clade-label.first {
+	border-left: none;
+	border-right: none;
+}
+.wiki-content table.clade td.clade-label.reverse {
+	border-left: none;
+	border-right: 1px solid;
+}
+.wiki-content table.clade td.clade-slabel {
+	padding: 0.1em 0.25em;
+	vertical-align: top;
+	text-align: center;
+	white-space: nowrap;
+	border-left: 1px solid;
+}
+.wiki-content table.clade td.clade-slabel.last {
+	border-left: none;
+	border-right: none;
+}
+.wiki-content table.clade td.clade-slabel.reverse {
+	border-left: none;
+	border-right: 1px solid;
+}
+.wiki-content table.clade td.clade-bar {
+	vertical-align: middle;
+	text-align: left;
+	padding: 0 0.5em;
+}
+.wiki-content table.clade td.clade-leaf,
+.wiki-content table.clade td.clade-leafR {
+	border: 0;
+	padding: 0;
+}
+.wiki-content table.clade td.clade-leaf {
+	text-align: left;
+}
+.wiki-content table.clade td.clade-leafR {
+	text-align: right;
+}
+.wiki-content table.clade td.clade-leaf p {
+	padding: 0 5px 0 2px;
+}
+
+/*
+ * Proportion / vote bars ({{Percentage bar}}) — div.percentage-bar holds a -fill div whose
+ * inline `width:%` survives but whose layout (position, height, the 100px track) was
+ * stripped with TemplateStyles, so the fill collapses to a full-width colour strip. Restore
+ * the fixed-width track (so bars stay comparable across rows) and absolute fill. The fill's
+ * inline background-color (party colours in election tables) overrides our accent default;
+ * where the source set none (demographics), the bar reads ember. Mirrored in ReaderCSS.swift.
+ */
+.wiki-content .percentage-bar {
+	position: relative;
+	display: inline-block;
+	width: 100px;
+	max-width: 100%;
+	height: 1.1em;
+	vertical-align: middle;
+	background: var(--color-surface-2);
+	border: 1px solid var(--color-hair);
+	border-radius: 2px;
+	overflow: hidden;
+}
+.wiki-content .percentage-bar-fill {
+	position: absolute;
+	top: 0;
+	left: 0;
+	height: 100%;
+	background: var(--color-accent);
+}
+.wiki-content .percentage-bar-text {
+	position: absolute;
+	inset: 0;
+	text-align: center;
+	font-family: var(--font-body);
+	font-size: 0.62rem;
+	line-height: 1.1em;
+	color: var(--color-ink);
+}
+
+/*
+ * CSS pie charts ({{Pie chart}}, "smooth" variant) — the circle is built from wedge divs
+ * whose clip-paths live only in the stripped TemplateStyles, so it collapses to a stack of
+ * coloured blocks; only the legend (colour swatch + "Label (NN%)") survives intact and reads
+ * better than a 200px pie on a phone anyway. So we drop the broken circle and present the
+ * legend as the chart: a wrapping run of swatched entries. Mirrored in ReaderCSS.swift.
+ */
+.wiki-content .smooth-pie,
+.wiki-content .smooth-pie-border {
+	display: none;
+}
+.wiki-content .smooth-pie-caption {
+	font-family: var(--font-body);
+	font-size: 0.8rem;
+	font-weight: 600;
+	color: var(--color-muted);
+	margin-bottom: 0.4em;
+}
+.wiki-content .smooth-pie-legend .l-color {
+	display: inline-block;
+	width: 0.75em;
+	height: 0.75em;
+	border-radius: 2px;
+	vertical-align: -0.05em;
+	margin: 0 0.35em 0 0;
+}
+.wiki-content .smooth-pie-legend .l-label {
+	margin-right: 0.9em;
+	font-size: 0.85rem;
+	line-height: 1.7;
+}
+
+/*
+ * Ancestor tables ({{Ahnentafel}}) — table.ahnentafel of person boxes (inline border + light
+ * pastel background) joined by .ahnentafel-t / -b connector cells whose borders were
+ * `var(--color-base,#000)` → black → invisible on the dark column, and stripped of layout by
+ * our generic table rules. Restore separate-border table layout, recolour the connectors to
+ * a visible hairline, and darken the box text (light ink on light pastel is illegible). Wide
+ * trees scroll via the generic table rule on the collapsible wrapper. Mirrored in ReaderCSS.swift.
+ */
+.wiki-content table.ahnentafel {
+	display: table;
+	border-collapse: separate;
+	border-spacing: 0;
+	font-size: 0.78rem;
+}
+.wiki-content table.ahnentafel td,
+.wiki-content table.ahnentafel th {
+	border: 0;
+	padding: 0;
+	background: none;
+	color: #1b1b1b;
+}
+/* Box text is on a light pastel; darken links and bold (our global b/strong → light ink). */
+.wiki-content table.ahnentafel a,
+.wiki-content table.ahnentafel b,
+.wiki-content table.ahnentafel strong {
+	color: #1b1b1b;
+}
+/* Connectors need td.* specificity to outrank the cell reset above (both 0,2,1 otherwise). */
+.wiki-content table.ahnentafel td.ahnentafel-t {
+	border-top: 1px solid var(--color-faint);
+	border-left: 1px solid var(--color-faint);
+}
+.wiki-content table.ahnentafel td.ahnentafel-b {
+	border-bottom: 1px solid var(--color-faint);
+	border-left: 1px solid var(--color-faint);
+}
+
+/*
+ * Native charts ({{Chart}} / <wiki-chart>) — Parsoid ships a pre-rendered <svg> authored for
+ * a light page: its canvas is fill="var(--background-color-base,#fff)" and text/axes use dark
+ * fallbacks, while data series carry explicit colours. Rather than fight every baked colour
+ * (and risk light-on-white where vars and explicit fills disagree), we give the canvas our
+ * warm "paper" plate — the same treatment as light line-drawings — so the native-light chart
+ * reads as an intentional card, and cap the fixed-px wrapper + svg to the column. Mirrored in
+ * iOS ReaderCSS.swift.
+ */
+.wiki-content .enwiki-chart {
+	width: auto !important;
+	max-width: 100%;
+	--background-color-base: #faf6ec;
+	background: #faf6ec;
+	border-radius: var(--radius-card);
+	padding: 0.4rem;
+	overflow: hidden;
+}
+.wiki-content .enwiki-chart svg {
+	display: block;
+	max-width: 100%;
+	height: auto;
+	margin: 0 auto;
+}

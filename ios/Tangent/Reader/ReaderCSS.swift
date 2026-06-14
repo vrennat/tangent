@@ -181,5 +181,75 @@ enum ReaderCSS {
 	/* Multi-map zoom switchers ({{Location map+}}) stack every zoom level once their JS is
 	   stripped — show only the first .center (the authored default). */
 	.switcher-container > .center ~ .center { display: none; }
+	/* Cladograms ({{Clade}}) — nested table.clade (in div.clade) whose L-connectors are
+	   border-left/border-bottom on the label cells in currentColor; that + the cell layout
+	   lived only in stripped TemplateStyles, and our generic table rules would flatten the
+	   tree. Scroll the wrapper, restore table layout, clear generic cell chrome, re-inject
+	   the cell rules (adapted from Clade/styles.css). Mirrors src/app.css. */
+	div.clade { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+	table.clade {
+	  display: table; width: auto; border-collapse: separate; border-spacing: 0;
+	  margin: 0; font-size: 0.8rem; line-height: 1; white-space: nowrap;
+	}
+	table.clade table.clade { width: 100%; line-height: inherit; }
+	table.clade td { border: 0; padding: 0; background: none; }
+	table.clade td.clade-label {
+	  min-width: 0.7em; width: 0.7em; padding: 0.1em 0.25em; vertical-align: bottom;
+	  text-align: center; white-space: nowrap; border-left: 1px solid; border-bottom: 1px solid;
+	}
+	table.clade td.clade-label.first { border-left: none; border-right: none; }
+	table.clade td.clade-label.reverse { border-left: none; border-right: 1px solid; }
+	table.clade td.clade-slabel {
+	  padding: 0.1em 0.25em; vertical-align: top; text-align: center; white-space: nowrap;
+	  border-left: 1px solid;
+	}
+	table.clade td.clade-slabel.last { border-left: none; border-right: none; }
+	table.clade td.clade-slabel.reverse { border-left: none; border-right: 1px solid; }
+	table.clade td.clade-bar { vertical-align: middle; text-align: left; padding: 0 0.5em; }
+	table.clade td.clade-leaf, table.clade td.clade-leafR { border: 0; padding: 0; }
+	table.clade td.clade-leaf { text-align: left; }
+	table.clade td.clade-leafR { text-align: right; }
+	table.clade td.clade-leaf p { padding: 0 5px 0 2px; }
+	/* Proportion / vote bars ({{Percentage bar}}) — the -fill div's inline width:% survives
+	   but its layout was stripped; restore the fixed-width track + absolute fill. Inline
+	   background-color (party colours) overrides the accent default. Mirrors src/app.css. */
+	.percentage-bar {
+	  position: relative; display: inline-block; width: 100px; max-width: 100%; height: 1.1em;
+	  vertical-align: middle; background: var(--surface2); border: 1px solid var(--hair);
+	  border-radius: 2px; overflow: hidden;
+	}
+	.percentage-bar-fill { position: absolute; top: 0; left: 0; height: 100%; background: var(--accent); }
+	.percentage-bar-text {
+	  position: absolute; inset: 0; text-align: center; font-family: var(--sans);
+	  font-size: 0.62rem; line-height: 1.1em; color: var(--ink);
+	}
+	/* CSS pie charts ({{Pie chart}}, smooth) — the circle's wedge clip-paths were stripped, so
+	   drop it and present the surviving legend (swatch + "Label (NN%)") as the chart. Mirrors
+	   src/app.css. */
+	.smooth-pie, .smooth-pie-border { display: none; }
+	.smooth-pie-caption { font-family: var(--sans); font-size: 0.8rem; font-weight: 600; color: var(--muted); margin-bottom: 0.4em; }
+	.smooth-pie-legend .l-color {
+	  display: inline-block; width: 0.75em; height: 0.75em; border-radius: 2px;
+	  vertical-align: -0.05em; margin: 0 0.35em 0 0;
+	}
+	.smooth-pie-legend .l-label { margin-right: 0.9em; font-size: 0.85rem; line-height: 1.7; }
+	/* Ancestor tables ({{Ahnentafel}}) — recolour the .ahnentafel-t/-b connectors (their
+	   var(--color-base,#000) → black → invisible on dark) and darken the light-pastel person
+	   boxes' text. Mirrors src/app.css. */
+	table.ahnentafel { display: table; border-collapse: separate; border-spacing: 0; font-size: 0.78rem; }
+	table.ahnentafel td, table.ahnentafel th { border: 0; padding: 0; background: none; color: #1b1b1b; }
+	table.ahnentafel a, table.ahnentafel b, table.ahnentafel strong { color: #1b1b1b; }
+	table.ahnentafel td.ahnentafel-t { border-top: 1px solid var(--faint); border-left: 1px solid var(--faint); }
+	table.ahnentafel td.ahnentafel-b { border-bottom: 1px solid var(--faint); border-left: 1px solid var(--faint); }
+	/* Native charts ({{Chart}} / <wiki-chart>) — the pre-rendered SVG is authored for a light
+	   page (canvas var(--background-color-base,#fff), dark text/axes), so give its canvas our
+	   warm paper plate — like light line-drawings — and cap the wrapper + svg to the column.
+	   Mirrors src/app.css. */
+	.enwiki-chart {
+	  width: auto !important; max-width: 100%;
+	  --background-color-base: #faf6ec; background: #faf6ec;
+	  border-radius: 14px; padding: 0.4rem; overflow: hidden;
+	}
+	.enwiki-chart svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
 	"""
 }
