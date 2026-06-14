@@ -2,6 +2,7 @@
 	import { tick } from 'svelte';
 	import { reader } from '$lib/reader/readerState.svelte';
 	import { articleTitleFromHref } from '$lib/wikipedia/links';
+	import LinkPreview from './LinkPreview.svelte';
 	import { X } from '@lucide/svelte';
 
 	let {
@@ -260,6 +261,10 @@
 		{/if}
 	</div>
 </aside>
+
+<!-- Desktop-only hover/focus peek for in-article links. Reads contentEl directly and
+     is inert on touch; renders its own position:fixed card, so it lives outside the aside. -->
+<LinkPreview container={contentEl} />
 
 {#if lightbox}
 	<!-- Full-screen image view above the reader. The backdrop and image are tap-to-dismiss
