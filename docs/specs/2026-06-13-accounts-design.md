@@ -55,11 +55,14 @@ codes) · `credentials` (WebAuthn passkeys) · `webauthn_challenges` (pending ce
 
 ## Status
 
-- **DONE + verified locally** (curl against `vite dev` + 19 new unit tests, 115 total green,
-  0 type errors): D1 schema, email-code auth, sessions, profile sync (pull/push/merge).
-- **TODO:** passkey (WebAuthn) endpoints + web UI; web sign-in UI + account panel + client
-  sync wiring; iOS native (email code is trivial; passkey = ASAuthorization + AASA — the
-  separate chunk flagged in memory).
+- **DONE + verified** (commits `85756eb`, `c7f3df4`; 115 tests green, 0 type errors):
+  - Server: D1 schema, email-code auth, sessions, profile sync (pull/push/merge).
+  - Web client: auth store, sign-in UI in the interests drawer, revision-guarded sync.
+  - Real-browser verified (Chrome on `vite dev`): email login sets an HttpOnly cookie that
+    auto-sends on reload (-> signed-in), merge pushed the local 35-token interest vector to
+    D1, "Interests synced" indicator correct.
+- **TODO:** passkey (WebAuthn) register/login endpoints + web "add a passkey" UI; iOS native
+  (email code is trivial; passkey = ASAuthorization + AASA — the separate chunk in memory).
 
 ## Open infra items (need Tanner)
 
