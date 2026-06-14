@@ -36,6 +36,11 @@ export async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T>
 	return value;
 }
 
+/** Drop a single entry — e.g. so a transient empty result isn't memoized for its full TTL. */
+export function cacheDelete(key: string): void {
+	store.delete(key);
+}
+
 export const TTL = {
 	/** Article summaries / links — stable, cache for a day. */
 	long: 24 * 60 * 60 * 1000,

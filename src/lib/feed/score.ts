@@ -153,3 +153,45 @@ export function scoreCandidate(candidate: Candidate, ctx: EngineContext): number
 
 	return score;
 }
+
+/**
+ * A user-free context for judging a candidate purely on its own merits. Everything keyed
+ * to a reader (interest/avoidance vectors, taste, history) is empty/neutral, so
+ * scoreCandidate collapses to its intrinsic terms — specificity + intrigue + image,
+ * minus the politics penalty — plus a constant position offset that cancels in any sort.
+ */
+const NEUTRAL_CONTEXT: EngineContext = {
+	tokenWeights: {},
+	tokenAvoidWeights: {},
+	tokenDocFreq: {},
+	taste: 'balanced',
+	recentTokens: new Set(),
+	seenTitles: new Set(),
+	noSurprise: true,
+	stepIndex: 0,
+	rng: () => 0
+};
+
+/**
+ * Rank a pool of candidates as standalone starting points, best first. Reuses
+ * scoreCandidate's intrinsic judgment so "good for Tangent" has a single definition,
+ * and removes the two kinds we never want a rabbit hole to *begin* on:
+ *
+ *  - disambiguation pages (no there there), and
+ *  - the political / authoritarian hubs the live feed already dampens (-500). Here it's a
+ *    clean removal rather than a penalty: a seed surface has plenty of alternatives, and
+ *    seeding on such a hub would make the very next /api/next step yank hard away from it.
+ *
+ * Pure: candidates should share a uniform `position` so ordering reflects merit, not the
+ * arbitrary order they arrived in.
+ */
+export function rankSeeds(candidates: Candidate[]): Candidate[] {
+	return candidates
+		.filter((c) => !c.isDisambiguation)
+		.filter(
+			(c) => !isPolitical(`${c.title} ${c.description ?? ''} ${(c.categories ?? []).join(' ')}`)
+		)
+		.map((candidate) => ({ candidate, score: scoreCandidate(candidate, NEUTRAL_CONTEXT) }))
+		.sort((a, b) => b.score - a.score)
+		.map((entry) => entry.candidate);
+}

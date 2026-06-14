@@ -118,8 +118,10 @@ async function fetchLeadLinkTitles(title: string): Promise<string[]> {
 	return ordered;
 }
 
-/** Enrich ordered titles with metadata, preserving each title's document-order position. */
-async function enrichByTitles(orderedTitles: string[]): Promise<Candidate[]> {
+/** Enrich ordered titles with metadata, preserving each title's document-order position.
+ *  Exported so other seed sources (e.g. the Main Page feed's thumbnail-less DYK hooks)
+ *  can resolve a list of titles to full candidates. */
+export async function enrichByTitles(orderedTitles: string[]): Promise<Candidate[]> {
 	const slice = orderedTitles.slice(0, MAX_CANDIDATES);
 	if (slice.length === 0) return [];
 
