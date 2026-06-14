@@ -78,6 +78,13 @@ export function sanitizeArticleHtml(raw: string): string {
 	// reference list alone can be several hundred KB.
 	html = pruneReferenceSections(html);
 
+	// Tag/wrap the two table-shaped visualizations whose mobile reflow needs more than CSS
+	// can express on its own (the rest — clade, ahnentafel, locmap, … — are pure CSS in
+	// app.css/ReaderCSS.swift). Both target stable class names / inline styles that survive
+	// the stripping above; the actual styling lives in the stylesheets.
+	html = reflowClimateTables(html);
+	html = reflowChartTrees(html);
+
 	// Tuck infoboxes into a collapsed "Quick facts" disclosure. The dense fact table
 	// (capital, population, taxonomy, …) is worth keeping, but linearized into our
 	// single column it dominates the reading flow — so we preserve it, collapsed.
@@ -190,6 +197,82 @@ function removeBlocks(html: string, openRe: RegExp, tag: string): string {
 		out.push(html.slice(cursor, start));
 		cursor = end;
 		openRe.lastIndex = end;
+	}
+	out.push(html.slice(cursor));
+	return out.join('');
+}
+
+/**
+ * Weather/climate boxes ({{Weather box}}) — a wide `<table class="wikitable">` whose first row
+ * is a `<th colspan>Climate data for …</th>` title over a month×metric grid of cells carrying an
+ * inline temperature-colour heatmap. The generic table rule already scrolls it, but the metric
+ * labels scroll out of view and the columns squeeze. We tag the box `wh-climate` so CSS can pin
+ * the label column (`position:sticky`), force natural column width, and keep the heatmap — the
+ * at-a-glance read survives intact. Detection scans only each table's own leading content (up to
+ * its first nested table) for a "Climate/Weather/Sunshine/Rainfall data for" title, so an outer
+ * layout table that merely contains a weather box isn't tagged (we descend into it instead).
+ */
+function reflowClimateTables(html: string): string {
+	const OPEN = /<table\b[^>]*\bclass="[^"]*\bwikitable\b[^"]*"[^>]*>/gi;
+	const TITLE = /\b(?:Climate|Weather|Sunshine|Rainfall) data for\b/i;
+	const out: string[] = [];
+	let cursor = 0;
+	for (let m = OPEN.exec(html); m; m = OPEN.exec(html)) {
+		const start = m.index;
+		if (start < cursor) continue; // inside an already-tagged table
+		const openEnd = start + m[0].length;
+		const end = matchingTableEnd(html, start);
+		if (end === -1) continue;
+		const body = html.slice(openEnd, end);
+		const firstNested = body.indexOf('<table');
+		const head = firstNested === -1 ? body : body.slice(0, firstNested);
+		if (TITLE.test(head)) {
+			out.push(html.slice(cursor, start), m[0].replace(/\bclass="/i, 'class="wh-climate '), body);
+			cursor = end;
+			OPEN.lastIndex = end;
+		} else {
+			OPEN.lastIndex = openEnd; // descend: the weather box may be nested in this table
+		}
+	}
+	out.push(html.slice(cursor));
+	return out.join('');
+}
+
+/**
+ * Family/pedigree tree charts ({{Chart}} / {{Tree chart}}) — a classless
+ * `<table style="…border-collapse: separate…margin: 0 auto…">` laying out person boxes (inline
+ * `border:1px solid`) on a dense pixel grid joined by connector segments drawn as inline borders
+ * on spacer cells. The relationships ARE that connector geometry — there's no semantic structure
+ * to reflow — so we preserve the authored layout and make it mobile-usable: wrap it in a
+ * horizontal-scroll div and tag it `wh-chart` so CSS can reset the generic cell mesh (letting
+ * only the inline connectors show) and darken light-background boxes. The classless +
+ * separate-collapse signature plus the connector idiom keeps navboxes/data tables out.
+ */
+function reflowChartTrees(html: string): string {
+	const OPEN = /<table\b(?![^>]*\bclass=)[^>]*\bstyle="[^"]*border-collapse:\s*separate[^"]*"[^>]*>/gi;
+	const CONNECTOR = /border:\s*0px solid|border-(?:bottom|right|left|top):\s*1px solid/i;
+	const out: string[] = [];
+	let cursor = 0;
+	for (let m = OPEN.exec(html); m; m = OPEN.exec(html)) {
+		const start = m.index;
+		if (start < cursor) continue;
+		const openEnd = start + m[0].length;
+		const end = matchingTableEnd(html, start);
+		if (end === -1) continue;
+		const body = html.slice(openEnd, end);
+		if (CONNECTOR.test(body)) {
+			out.push(
+				html.slice(cursor, start),
+				'<div class="wh-chart-scroll">',
+				m[0].replace('<table', '<table class="wh-chart"'),
+				body,
+				'</div>'
+			);
+			cursor = end;
+			OPEN.lastIndex = end;
+		} else {
+			OPEN.lastIndex = openEnd; // descend into nested separate-collapse tables
+		}
 	}
 	out.push(html.slice(cursor));
 	return out.join('');

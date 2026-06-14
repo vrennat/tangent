@@ -148,3 +148,78 @@ describe('sanitizeArticleHtml — footnote pruning', () => {
 		expect(out).toContain('External links');
 	});
 });
+
+/**
+ * Climate/weather boxes are tagged `wh-climate` so CSS can pin the metric-label column and keep
+ * the heatmap. Detection scans each wikitable's own leading content (before any nested table) for
+ * a "Climate/Weather/Sunshine/Rainfall data for" title, so an outer layout table that merely
+ * contains a weather box is skipped in favour of the inner box.
+ */
+const weatherBox = (title: string, cls = 'wikitable') =>
+	`<table class="${cls}"><tbody>` +
+	`<tr><th colspan="3">${title}</th></tr>` +
+	`<tr><th>Month</th><th>Jan</th><th>Feb</th></tr>` +
+	`<tr><th>Record high</th><td style="background:#FF9B37">67</td><td style="background:#FF7800">75</td></tr>` +
+	`</tbody></table>`;
+
+describe('sanitizeArticleHtml — climate-box tagging', () => {
+	it('tags a weather box with wh-climate (keeping its other classes)', () => {
+		const out = sanitizeArticleHtml(weatherBox('Climate data for Testville'));
+		expect(out).toContain('class="wh-climate wikitable"');
+		expect(out).toContain('background:#FF9B37'); // heatmap colour survives
+	});
+
+	it('tags the "Sunshine data for" variant', () => {
+		const out = sanitizeArticleHtml(weatherBox('Sunshine data for Testville'));
+		expect(out).toContain('wh-climate');
+	});
+
+	it('leaves an ordinary wikitable untouched', () => {
+		const out = sanitizeArticleHtml(
+			'<table class="wikitable"><tbody><tr><th>Year</th><th>Pop.</th></tr><tr><td>1900</td><td>500</td></tr></tbody></table>'
+		);
+		expect(out).not.toContain('wh-climate');
+	});
+
+	it('tags the inner box, not an outer layout table that contains it', () => {
+		const out = sanitizeArticleHtml(
+			`<table class="wikitable"><tbody><tr><td>${weatherBox('Climate data for Testville')}</td></tr></tbody></table>`
+		);
+		expect(out.split('wh-climate').length - 1).toBe(1); // exactly one tag
+	});
+});
+
+/**
+ * Family/pedigree tree charts ({{Chart}}) — a classless `border-collapse:separate` table whose
+ * cells draw the tree with inline borders — are wrapped in a horizontal-scroll div and tagged
+ * `wh-chart`. The classless + separate-collapse signature plus the connector idiom keeps navboxes
+ * and ordinary tables out.
+ */
+const chartTree = (extraOpen = '') =>
+	`<table style="border-spacing: 0px; border-collapse: separate; margin: 0 auto;"${extraOpen}><tbody>` +
+	`<tr><td style="border:1px solid">Sophia</td></tr>` +
+	`<tr><td style="border:0px solid; border-width:1px"></td></tr>` +
+	`</tbody></table>`;
+
+describe('sanitizeArticleHtml — chart-tree wrapping', () => {
+	it('wraps a chart tree in a scroll div and tags the table', () => {
+		const out = sanitizeArticleHtml(chartTree());
+		expect(out).toContain('<div class="wh-chart-scroll">');
+		expect(out).toContain('<table class="wh-chart"');
+		expect(out).toContain('Sophia');
+	});
+
+	it('does not wrap a classed table (e.g. navbox) even with separate collapse', () => {
+		const out = sanitizeArticleHtml(
+			'<table class="navbox" style="border-collapse: separate"><tbody><tr><td style="border-bottom:1px solid"></td></tr></tbody></table>'
+		);
+		expect(out).not.toContain('wh-chart');
+	});
+
+	it('does not wrap a separate-collapse table that lacks connector cells', () => {
+		const out = sanitizeArticleHtml(
+			'<table style="border-collapse: separate; margin: 0 auto;"><tbody><tr><td>plain cell</td></tr></tbody></table>'
+		);
+		expect(out).not.toContain('wh-chart');
+	});
+});

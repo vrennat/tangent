@@ -166,6 +166,13 @@ enum ReaderCSS {
 	  font-family: var(--sans); font-size: 0.7rem; font-weight: 700;
 	  letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted);
 	}
+	/* EasyTimeline raster graphics (<timeline>) — a fixed-size PNG (e.g. 1100×120) with a
+	   pixel-coordinate <map>/<area> overlay, wrapped in div.timeline-wrapper. The global
+	   img{max-width:100%} would shrink it to an illegible strip and misalign the hotspots;
+	   keep it at native resolution and scroll the wrapper so the <area> targets stay aligned.
+	   Mirrors the web .timeline-wrapper rules (src/app.css). */
+	.timeline-wrapper { max-width: 100%; overflow-x: auto; }
+	.timeline-wrapper img { max-width: none; border-radius: 0; }
 	/* Pushpin location maps ({{Location map}}) — re-inject position:absolute (it lived only
 	   in the stripped TemplateStyles) so % markers land on the map; cap wrappers + image to
 	   the column so they shrink in lockstep and stay aligned; neutralize the dark image
@@ -251,5 +258,30 @@ enum ReaderCSS {
 	  border-radius: 14px; padding: 0.4rem; overflow: hidden;
 	}
 	.enwiki-chart svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+	/* Weather/climate boxes ({{Weather box}}, tagged table.wh-climate server-side) — keep the
+	   inline temperature heatmap and scroll the months horizontally, but pin the metric-label
+	   column so it stays readable. nowrap forces natural column width so it scrolls instead of
+	   squeezing. NOTE: position:sticky inside an overflow-x:auto block is WebKit-finicky — confirm
+	   it pins on-device. Mirrors src/app.css. */
+	table.wh-climate { border-collapse: separate; border-spacing: 0; white-space: nowrap; }
+	table.wh-climate th, table.wh-climate td { border: 1px solid var(--hair); padding: 0.25em 0.5em; }
+	table.wh-climate tr > :first-child {
+	  position: sticky; left: 0; z-index: 1; background: var(--surface2); color: var(--ink); text-align: left;
+	}
+	/* Family/pedigree tree charts ({{Chart}}/{{Tree chart}}, wrapped div.wh-chart-scroll + tagged
+	   table.wh-chart) — preserve the authored grid (the connectors ARE the data); strip the generic
+	   cell mesh so only the inline borders draw, and scroll the wrapper. Light-bg boxes get dark
+	   text (as with ahnentafel). Mirrors src/app.css. */
+	.wh-chart-scroll { max-width: 100%; overflow-x: auto; }
+	table.wh-chart {
+	  display: table; width: auto; border-collapse: separate; border-spacing: 0; margin: 0 auto;
+	  white-space: nowrap; font-size: 0.72rem; color: var(--read);
+	}
+	table.wh-chart td, table.wh-chart th { border: 0; padding: 0; background: none; }
+	table.wh-chart td[style*='border:1px solid'] { padding: 0.15em 0.3em; }
+	table.wh-chart td[style*='background'],
+	table.wh-chart td[style*='background'] a,
+	table.wh-chart td[style*='background'] b,
+	table.wh-chart td[style*='background'] strong { color: #1b1b1b; }
 	"""
 }

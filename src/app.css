@@ -696,6 +696,24 @@ body::before {
 	color: var(--color-muted);
 }
 /*
+ * EasyTimeline raster graphics (<timeline>) — rendered by Wikipedia as a fixed-size PNG
+ * (e.g. 1100×120) with a pixel-coordinate <map>/<area> hotspot overlay, wrapped in
+ * div.timeline-wrapper. Our global img{max-width:100%} shrinks that PNG to the column,
+ * collapsing a 1100px-wide timeline to an illegible ~40px strip on a phone AND misaligning
+ * every hotspot. Instead we keep the image at native resolution (max-width:none) and scroll
+ * the wrapper — legible, and because the pixels aren't scaled the <area> click targets stay
+ * aligned. (Distinct from {{Nature timeline}}, which is div-positioned and reflowed in
+ * wikipedia/timeline.ts.) Mirrored in iOS ReaderCSS.swift.
+ */
+.wiki-content .timeline-wrapper {
+	max-width: 100%;
+	overflow-x: auto;
+}
+.wiki-content .timeline-wrapper img {
+	max-width: none;
+	border-radius: 0;
+}
+/*
  * Pushpin location maps ({{Location map}} and kin) — a base map <img> with markers and
  * labels positioned over it by inline `top`/`left` %. The wrappers carry inline
  * `position:relative` and the markers their %, but `position:absolute` lived only in the
@@ -963,4 +981,75 @@ body::before {
 	max-width: 100%;
 	height: auto;
 	margin: 0 auto;
+}
+
+/*
+ * Weather/climate boxes ({{Weather box}}, tagged table.wh-climate server-side) — a month×metric
+ * grid carrying an inline temperature heatmap. We keep the heatmap and scroll the months
+ * horizontally, but pin the metric-label column so it stays readable while scrolling. The data
+ * cells' inline background/colour (the heatmap) survive sanitization and read as-is.
+ * border-collapse:separate (over the generic collapse) gives the sticky column a clean opaque
+ * edge; white-space:nowrap forces natural column width so it scrolls rather than squeezing the
+ * labels to one word per line. NOTE: position:sticky inside an overflow-x:auto block is
+ * engine-divergent — verified on Blink; needs an iOS WebKit check. Mirrored in ReaderCSS.swift.
+ */
+.wiki-content table.wh-climate {
+	border-collapse: separate;
+	border-spacing: 0;
+	white-space: nowrap;
+}
+.wiki-content table.wh-climate th,
+.wiki-content table.wh-climate td {
+	border: 1px solid var(--color-hair);
+	padding: 0.25em 0.5em;
+}
+.wiki-content table.wh-climate tr > :first-child {
+	position: sticky;
+	left: 0;
+	z-index: 1;
+	background: var(--color-surface-2);
+	color: var(--color-ink);
+	text-align: left;
+}
+
+/*
+ * Family/pedigree tree charts ({{Chart}} / {{Tree chart}}, wrapped div.wh-chart-scroll + tagged
+ * table.wh-chart server-side) — a dense pixel grid of person boxes joined by inline-border
+ * connectors. The relationships ARE that connector geometry (no semantic structure to reflow), so
+ * we keep the authored layout and just make it mobile-usable: scroll the wrapper, and strip the
+ * generic cell mesh (border + 0.35em padding on every spacer cell, which buries the connectors
+ * and inflates the grid) down to nothing so ONLY the authored inline borders — the connectors and
+ * box outlines — draw. Boxes with a light inline background get dark text (light ink on cream is
+ * illegible, as with ahnentafel); transparent boxes keep the light read tone. Mirrored in
+ * ReaderCSS.swift.
+ */
+.wiki-content .wh-chart-scroll {
+	max-width: 100%;
+	overflow-x: auto;
+}
+.wiki-content table.wh-chart {
+	display: table;
+	width: auto;
+	border-collapse: separate;
+	border-spacing: 0;
+	margin: 0 auto;
+	white-space: nowrap;
+	font-size: 0.72rem;
+	color: var(--color-read);
+}
+.wiki-content table.wh-chart td,
+.wiki-content table.wh-chart th {
+	border: 0;
+	padding: 0;
+	background: none;
+}
+.wiki-content table.wh-chart td[style*='border:1px solid'] {
+	padding: 0.15em 0.3em;
+}
+/* Light-background boxes need dark text + dark links/bold (our globals are light ink). */
+.wiki-content table.wh-chart td[style*='background'],
+.wiki-content table.wh-chart td[style*='background'] a,
+.wiki-content table.wh-chart td[style*='background'] b,
+.wiki-content table.wh-chart td[style*='background'] strong {
+	color: #1b1b1b;
 }
