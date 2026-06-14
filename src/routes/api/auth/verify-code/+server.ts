@@ -1,7 +1,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getDb } from '$lib/server/db';
-import { findOrCreateUserByEmail, isValidEmail, markEmailVerified } from '$lib/server/auth/users';
+import { getUserByEmail, isValidEmail, markEmailVerified } from '$lib/server/auth/users';
 import { verifyCode } from '$lib/server/auth/emailCode';
 import { createSession, SESSION_COOKIE, SESSION_COOKIE_OPTS } from '$lib/server/auth/session';
 
@@ -29,7 +29,9 @@ export const POST: RequestHandler = async ({ request, platform, cookies }) => {
 		return json({ error: 'invalid request' }, { status: 400 });
 	}
 
-	const user = await findOrCreateUserByEmail(db, email);
+	const user = await getUserByEmail(db, email);
+	// Generic 401 whether the account is missing or the code is wrong — no enumeration.
+	if (!user) return json({ error: 'invalid or expired code' }, { status: 401 });
 	const ok = await verifyCode(db, user.id, code, 'login');
 	if (!ok) return json({ error: 'invalid or expired code' }, { status: 401 });
 

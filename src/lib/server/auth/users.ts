@@ -52,3 +52,13 @@ export async function getUserById(db: D1Database, userId: string): Promise<Sessi
 		.first<{ id: string; email: string; emailVerified: number }>();
 	return row ? { id: row.id, email: row.email, emailVerified: row.emailVerified === 1 } : null;
 }
+
+/** Look up by email without creating. Used at code-verify time so a typo'd or never-requested
+ * email can't mint orphan accounts (only request-code creates). */
+export async function getUserByEmail(db: D1Database, rawEmail: string): Promise<SessionUser | null> {
+	const row = await db
+		.prepare('SELECT id, email, email_verified AS emailVerified FROM users WHERE email = ?')
+		.bind(normalizeEmail(rawEmail))
+		.first<{ id: string; email: string; emailVerified: number }>();
+	return row ? { id: row.id, email: row.email, emailVerified: row.emailVerified === 1 } : null;
+}
