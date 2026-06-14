@@ -370,8 +370,13 @@ body::before {
 	font-family: var(--font-display);
 	font-size: 1.0625rem;
 	line-height: 1.75;
+	/* overflow-wrap breaks only a word that would otherwise overflow the column — enough
+	   of a backstop (with the overflow-x clip below) for long URLs/identifiers. We do NOT
+	   set `word-break: break-word`: it lowers every word's min-content width to one
+	   character, which collapses auto-layout table columns and breaks ordinary words
+	   mid-token ("Programmab le"). Without it, columns size to whole words and the table
+	   scrolls (see the table rule) instead of shredding its text. */
 	overflow-wrap: break-word;
-	word-break: break-word;
 	/* Backstop against a whole-pane horizontal scrollbar. The reader body is
 	   `overflow-y:auto`, which per spec resolves overflow-x to `auto` too — so any
 	   child wider than the column (an untagged wide table, a fixed-px panorama, a
@@ -574,6 +579,16 @@ body::before {
 	border-radius: 2px;
 	box-shadow: none;
 }
+/* The montage caption enumerates the tiles (one line each) — it reads as a centered
+   caption, not a bulleted list. The default disc markers + indent leave bullets
+   stranded at the far left while the centered text floats away from them, so drop the
+   markers and indent and let each item center under the caption. */
+.wiki-content .tmulti .thumbcaption ul,
+.wiki-content .tmulti .thumbcaption ol {
+	list-style: none;
+	margin: 0.25em 0 0;
+	padding-left: 0;
+}
 .wiki-content b,
 .wiki-content strong {
 	color: var(--color-ink);
@@ -755,6 +770,7 @@ body::before {
 .wiki-content .ext-phonos,
 .wiki-content .mw-tmh-player,
 .wiki-content sup.reference,
+.wiki-content .sister-inline-image,
 .wiki-content .reflist,
 .wiki-content ol.references,
 .wiki-content style,

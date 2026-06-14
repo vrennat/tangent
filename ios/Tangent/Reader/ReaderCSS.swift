@@ -26,8 +26,10 @@ enum ReaderCSS {
 	  font-size: 1.0625rem;
 	  line-height: 1.75;
 	  padding: 0.5rem 1.25rem calc(2rem + env(safe-area-inset-bottom));
+	  /* overflow-wrap (not word-break: break-word) — the latter collapses auto-layout table
+	     columns to 1ch min-width and breaks ordinary words mid-token; without it columns size
+	     to whole words and the table scrolls instead. */
 	  overflow-wrap: break-word;
-	  word-break: break-word;
 	  /* Backstop against the article panning sideways: any child wider than the column
 	     (an untagged wide table, a fixed-px panorama, a stray graphic) would otherwise let
 	     the whole webview scroll horizontally. Known-wide constructs get their own internal
@@ -102,6 +104,11 @@ enum ReaderCSS {
 	  width: 100%; height: 100%; object-fit: cover;
 	  margin: 0; border: 0; border-radius: 2px; box-shadow: none;
 	}
+	/* The montage caption enumerates the tiles (one line each) — drop the disc markers +
+	   indent so items center under the caption instead of bullets stranded at the left. */
+	.tmulti .thumbcaption ul, .tmulti .thumbcaption ol {
+	  list-style: none; margin: 0.25em 0 0; padding-left: 0;
+	}
 	b, strong { color: var(--ink); }
 	blockquote { margin: 1em 0; padding-left: 1em; border-left: 3px solid var(--hair-strong); color: var(--faint); }
 	hr { border: 0; border-top: 1px solid var(--hair); margin: 1.4em 0; }
@@ -141,7 +148,7 @@ enum ReaderCSS {
 	.mw-editsection, .shortdescription, .noprint, .nomobile, .navbar, .navbox,
 	.navbox-styles, .metadata, .ambox, .mbox-image, .mw-empty-elt, .mw-jump-link,
 	.sidebar, .vertical-navbox, .IPA, .ext-phonos, .mw-tmh-player, sup.reference,
-	.reflist, ol.references, style, link {
+	.sister-inline-image, .reflist, ol.references, style, link {
 	  display: none !important;
 	}
 	/* Reflowed graphical timeline ({{Nature timeline}} & kin) — a continuous era-coloured
