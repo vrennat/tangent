@@ -695,3 +695,52 @@ body::before {
 	text-transform: uppercase;
 	color: var(--color-muted);
 }
+/*
+ * Pushpin location maps ({{Location map}} and kin) — a base map <img> with markers and
+ * labels positioned over it by inline `top`/`left` %. The wrappers carry inline
+ * `position:relative` and the markers their %, but `position:absolute` lived only in the
+ * stripped TemplateStyles, so without this the pins and labels detach and stack below the
+ * map. We re-inject it; cap the fixed-px wrappers + image to the column (max-width) so they
+ * shrink in lockstep and the % alignment stays exact below ~270px; strip the drawing
+ * "paper plate" (background:293) that would inset the map and skew every offset; and give
+ * the labels a haloed near-black fill so they read on the light map. Mirrored in iOS
+ * ReaderCSS.swift.
+ */
+.wiki-content .locmap,
+.wiki-content .locmap div:not(.od):not(.id):not(.pl):not(.pr):not(.pv):not(.l0) {
+	max-width: 100%;
+}
+.wiki-content .locmap .od,
+.wiki-content .locmap .id,
+.wiki-content .locmap .l0,
+.wiki-content .locmap .pl,
+.wiki-content .locmap .pr,
+.wiki-content .locmap .pv {
+	position: absolute;
+}
+/* The base map and tiny pin icons are SVGs tagged data-file-type="drawing"; the global
+   drawing plate (padding + warm background) would inset the map and shift every % offset. */
+.wiki-content .locmap img {
+	background: none;
+	padding: 0;
+	border-radius: 0;
+}
+/* Marker labels inherit our light body ink and sit over a light relief map — illegible.
+   A near-black fill with a white halo reads on either tone, like a conventional map label. */
+.wiki-content .locmap .pl,
+.wiki-content .locmap .pr,
+.wiki-content .locmap .pv,
+.wiki-content .locmap .l0 {
+	color: #1b1b1b;
+	font-family: var(--font-body);
+	font-size: 0.7rem;
+	line-height: 1.15;
+	text-shadow:
+		0 0 2px #fff,
+		0 0 3px #fff;
+}
+/* Multi-map zoom switchers ({{Location map+}}) stack every zoom level once their toggle
+   JS is stripped — show only the first .center (the authored default). */
+.wiki-content .switcher-container > .center ~ .center {
+	display: none;
+}

@@ -166,5 +166,20 @@ enum ReaderCSS {
 	  font-family: var(--sans); font-size: 0.7rem; font-weight: 700;
 	  letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted);
 	}
+	/* Pushpin location maps ({{Location map}}) — re-inject position:absolute (it lived only
+	   in the stripped TemplateStyles) so % markers land on the map; cap wrappers + image to
+	   the column so they shrink in lockstep and stay aligned; neutralize the dark image
+	   backdrop; give labels a haloed near-black fill so they read on the light map. Mirrors
+	   the web .locmap rules (src/app.css). */
+	.locmap, .locmap div:not(.od):not(.id):not(.pl):not(.pr):not(.pv):not(.l0) { max-width: 100%; }
+	.locmap .od, .locmap .id, .locmap .l0, .locmap .pl, .locmap .pr, .locmap .pv { position: absolute; }
+	.locmap img { background: none; border-radius: 0; }
+	.locmap .pl, .locmap .pr, .locmap .pv, .locmap .l0 {
+	  color: #1b1b1b; font-family: var(--sans); font-size: 0.7rem; line-height: 1.15;
+	  text-shadow: 0 0 2px #fff, 0 0 3px #fff;
+	}
+	/* Multi-map zoom switchers ({{Location map+}}) stack every zoom level once their JS is
+	   stripped — show only the first .center (the authored default). */
+	.switcher-container > .center ~ .center { display: none; }
 	"""
 }
