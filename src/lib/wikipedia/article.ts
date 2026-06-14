@@ -4,13 +4,19 @@ import { reflowGraphicalTimelines } from './timeline';
 const WIKI = 'https://en.wikipedia.org';
 
 /**
- * Turn Wikipedia's Parsoid HTML into something safe and compact to drop inline
- * with {@html}. The source is trusted (HTTPS Wikimedia, and `/page/html` carries
- * no <script> tags), but we still strip executable surfaces defensively and shed
- * the bulky Parsoid metadata that would otherwise bloat the payload several-fold.
+ * Turn Wikipedia's Parsoid HTML into something compact to drop inline with {@html}:
+ * structural transforms (heading demotion, infobox/quick-facts wrapping, table tagging,
+ * reference pruning) plus a regex pass that sheds bulky Parsoid metadata and makes a
+ * first cut at executable surfaces.
  *
- * Presentation cruft (edit links, navboxes, maintenance boxes) is left in place
- * and hidden via CSS (`.wiki-content`) rather than fragile server-side surgery.
+ * NOT the security boundary on its own. The regex executable-surface strip here is a
+ * cheap first approximation; the authoritative, parser-based scrub is scrubExecutableHtml,
+ * applied in fetchArticleHtml. Anything serving this HTML to a client MUST go through
+ * fetchArticleHtml (or run scrubExecutableHtml itself) — do not feed the raw output of
+ * this function to {@html}. Exported only so the structural transforms are unit-testable.
+ *
+ * Presentation cruft (edit links, navboxes, maintenance boxes) is left in place and hidden
+ * via CSS (`.wiki-content`) rather than fragile server-side surgery.
  */
 export function sanitizeArticleHtml(raw: string): string {
 	let html = raw;
@@ -436,9 +442,123 @@ function removeEmptyLeafSections(html: string): string {
 	return out.join('');
 }
 
+// A handful of named character references an attacker could use to spell a scheme or its
+// colon (`javascript&colon;…`). Numeric refs cover the rest and are decoded generically.
+const NAMED_REFS: Record<string, string> = {
+	colon: ':',
+	tab: '\t',
+	newline: '\n',
+	sol: '/',
+	lpar: '(',
+	rpar: ')',
+	// Refs that decode to a character isSafeUrl strips — so `java&shy;script:` reveals its
+	// scheme after decode+strip instead of hiding behind the entity. Keyed lowercase.
+	nonbreakingspace: '\u00A0',
+	shy: '\u00AD',
+	zerowidthspace: '\u200B'
+};
+
+/**
+ * Decode HTML character references the way a browser would when parsing an attribute —
+ * ONE level only (browsers don't re-decode, so double-encoded text never forms a live
+ * scheme). Lets `isSafeUrl` see `&#106;avascript:` / `javascript&#58;…` as the
+ * `javascript:` the browser will; HTMLRewriter hands us the raw, still-encoded value.
+ */
+function decodeRefs(s: string): string {
+	const cp = (n: number) => (n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : '');
+	return s
+		.replace(/&#x([0-9a-f]+);?/gi, (_m, h: string) => cp(parseInt(h, 16)))
+		.replace(/&#(\d+);?/g, (_m, d: string) => cp(parseInt(d, 10)))
+		.replace(/&([a-z]+);/gi, (m, name: string) => NAMED_REFS[name.toLowerCase()] ?? m);
+}
+
+/**
+ * Whether a URL is safe to keep in an href/src. Only http(s)/mailto/tel and scheme-less
+ * (relative or anchor) URLs pass; javascript:, data:, vbscript: and any other scheme are
+ * rejected. Character references are decoded (decodeRefs) and control characters +
+ * surrounding whitespace stripped first, so obfuscations like an entity-encoded
+ * `&#106;avascript:`, an embedded tab, or a leading space can't hide the scheme.
+ * Exported for unit testing — the scrub that calls it needs the Worker runtime.
+ */
+const SAFE_URL_SCHEME = /^(?:https?|mailto|tel):/i;
+export function isSafeUrl(value: string): boolean {
+	const v = decodeRefs(value).replace(/[\u0000-\u0020\u007F-\u00A0\u00AD\u2000-\u200F\u2028-\u202F\u205F-\u2064\u2066-\u206F\u3000\uFEFF]/g, '');
+	const scheme = /^[a-z][a-z0-9+.-]*:/i.exec(v);
+	return !scheme || SAFE_URL_SCHEME.test(scheme[0]);
+}
+
+/**
+ * A srcset is a comma-separated list of `url [descriptor]` candidates. It only ever loads
+ * images (a javascript:/data:text/html candidate can't execute via srcset), but we still
+ * gate it so the attribute carries no non-safe scheme. Splitting on comma can break a
+ * data: candidate apart, but that only makes the leading fragment fail isSafeUrl — which
+ * is the outcome we want (reject). Returns false if any candidate's URL is non-safe.
+ */
+export function isSafeSrcset(value: string): boolean {
+	return value.split(',').every((part) => {
+		const url = part.trim().split(/\s+/)[0];
+		return !url || isSafeUrl(url);
+	});
+}
+
+// Minimal structural view of the Worker-runtime HTMLRewriter, typed locally so we can
+// reach the runtime global without a `/// <reference types="@cloudflare/workers-types" />`
+// (which would shadow the DOM `Response` in client code — see app.d.ts).
+interface RewriterElement {
+	readonly attributes: IterableIterator<string[]>;
+	remove(): void;
+	removeAttribute(name: string): void;
+	setAttribute(name: string, value: string): void;
+}
+interface Rewriter {
+	on(selector: string, handlers: { element(el: RewriterElement): void }): Rewriter;
+	transform(res: Response): { text(): Promise<string> };
+}
+const RewriterCtor = (globalThis as { HTMLRewriter?: new () => Rewriter }).HTMLRewriter;
+
+const EVENT_HANDLER_ATTR = /^on[a-z]/i;
+const DROP_ATTRS = new Set(['srcdoc', 'formaction', 'ping']);
+const URL_ATTRS = new Set(['href', 'src', 'xlink:href', 'action', 'data']);
+const DROP_ELEMENTS = 'script, style, link, base, iframe, object, embed, meta';
+
+/**
+ * Authoritative, parser-based scrub of executable surfaces — the security layer the
+ * regex pass in sanitizeArticleHtml only approximates (regex can't see unclosed tags,
+ * entity-encoded schemes, or odd attribute quoting). Runs in the Worker runtime so the
+ * HTML reaching the client's `{@html}` is parser-clean: drop script/style/external-
+ * resource elements, strip every inline event handler, and neutralize any non-safe URL
+ * (javascript:, data:, …) on link/src attributes. Inline `style`/`class`/`data-*` are
+ * deliberately kept — the reader's graphics (locmap pins, heatmaps, percentage bars) are
+ * built from them, and CSS can't execute script. In Node (vite dev, vitest) HTMLRewriter
+ * is absent, so this no-ops and sanitizeArticleHtml's regex pass stands in — dev is the
+ * developer's own machine reading already-sanitized Parsoid, not a user attack surface.
+ */
+async function scrubExecutableHtml(html: string): Promise<string> {
+	if (!RewriterCtor) return html;
+	const rewriter = new RewriterCtor()
+		.on(DROP_ELEMENTS, { element: (el) => el.remove() })
+		.on('*', {
+			element(el) {
+				const remove: string[] = [];
+				const neutralize: string[] = [];
+				for (const [name, value] of el.attributes) {
+					const lower = name.toLowerCase();
+					if (EVENT_HANDLER_ATTR.test(lower) || DROP_ATTRS.has(lower)) remove.push(name);
+					else if (lower === 'srcset' && !isSafeSrcset(value)) remove.push(name);
+					else if (URL_ATTRS.has(lower) && !isSafeUrl(value)) neutralize.push(name);
+				}
+				for (const name of remove) el.removeAttribute(name);
+				for (const name of neutralize) el.setAttribute(name, '#');
+			}
+		});
+	return rewriter.transform(new Response(html)).text();
+}
+
 /** Fetch a full article as sanitized, inline-ready HTML. Null if the page is gone. */
 export async function fetchArticleHtml(title: string): Promise<string | null> {
 	const raw = await restGetText(`page/html/${restTitlePath(title)}`);
 	if (!raw) return null;
-	return sanitizeArticleHtml(raw);
+	// Structural transforms first (sync, regex), then the parser-based security scrub so
+	// the HTML that reaches {@html} in the reader is parser-clean in production.
+	return scrubExecutableHtml(sanitizeArticleHtml(raw));
 }
