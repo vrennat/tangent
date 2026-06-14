@@ -30,6 +30,48 @@ const HAS_YEAR = /\b1\d{3}\b|\b20\d{2}\b/;
  *  don't read as era markers; "century" is the lowercase form descriptions actually use. */
 const HAS_ERA = /\bBC\b|\bAD\b|\bcentur(y|ies)\b/;
 
+/** Polity headword — a country / state / dependency. Continent names in these read as
+ *  *location* ("Country in East Asia"), never as the subject, so this gates the
+ *  geographic-abstraction test below: "South Africa" (country) survives while "Southern
+ *  Africa" (region) does not. */
+const POLITY = /\b(countr(y|ies)|nation|sovereign state|U\.S\. state|state of|part of)\b/i;
+/** Description whose subject is fundamentally "[a] region / subregion / continent",
+ *  optionally led by a compass direction ("Northern region of…", "Subregion of…"). */
+const REGION_HEAD =
+	/^(the |a )?(large )?(north|south|east|west|central)(ern)?\s+region\b|^(the |a )?(large )?(geographical |geographic )?(sub)?regions?\b|^(the )?continent\b/i;
+/** A bare "<Direction> <Continent>" title (e.g. "Eastern Europe", whose Wikidata
+ *  description is often empty). Continent names are matched here only as the *whole*
+ *  title, so non-continent "North Korea" / "Northern Ireland" and polity-gated
+ *  "South Africa" are untouched. */
+const CONTINENTAL_TITLE =
+	/^(north|south|east|west|central|northern|southern|eastern|western|northwestern|northeastern|southwestern|southeastern)\s+(europe|asia|africa|america|americas|oceania|antarctica)$/i;
+/** The region's container is a whole continent / ocean. Continent names are matched
+ *  only as the *scope* of a region head (right after of/in/across), never bare, so a
+ *  country scope ("Region of Italy", "…of Russia…") keeps the region concrete. */
+const CONTINENTAL_SCOPE =
+	/\b(of|in|across)\s+(the\s+)?(north(ern)?|south(ern)?|east(ern)?|west(ern)?|central\s+)*\s*(continents?|europe(an)?|asia(n)?|africa(n)?|oceania|antarctica|americas|america|eurasia|sahara|pacific ocean|arctic)\b/i;
+
+/**
+ * A continental abstraction rung — the "X is a region of [continent]" parents a position
+ * ranking climbs into (United Kingdom → Northwestern Europe → Northern Europe → Continent).
+ * The geographic analogue of ABSTRACT_LEAD: NAMED_TITLE wrongly rewards "Northern Europe"
+ * (+0.5) as a proper noun and ABSTRACT_LEAD never covered regions, so the climb went
+ * unchecked. Boundary verified against real Wikidata descriptions: continental regions
+ * fall, countries/states and sub-continental named regions (Tuscany, Siberia, New England)
+ * stay; continental-scope named regions (Scandinavia, Balkans, Polynesia) fall knowingly —
+ * the relevance taper in scoreCandidate restores them for a geography-interested reader.
+ */
+function isContinentalRegion(title: string, desc: string): boolean {
+	if (POLITY.test(desc)) return false;
+	if (CONTINENTAL_TITLE.test(title)) return true;
+	if (!REGION_HEAD.test(desc)) return false;
+	// A region descriptor with no container clause is the bare abstraction itself
+	// ("Geographical region", "Continent"); a scoped one is a sink only when the
+	// container is a whole continent/ocean, not a country ("Region of Italy" stays).
+	if (!/\b(of|in|across)\b/i.test(desc)) return true;
+	return CONTINENTAL_SCOPE.test(desc);
+}
+
 /**
  * Intrinsic specificity of a candidate, a signed signal in roughly [-2, +2].
  * Positive = concrete/named/dated (people, places, events, works); negative = generic
@@ -52,6 +94,7 @@ export function specificity(candidate: Candidate): number {
 
 	if (ABSTRACT_LEAD.test(desc)) s -= 1;
 	if (LISTY_TITLE.test(title)) s -= 1.2;
+	if (isContinentalRegion(title, desc)) s -= 1.2; // continent / region-of-continent rungs
 
 	return s;
 }

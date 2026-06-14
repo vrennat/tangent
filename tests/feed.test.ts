@@ -348,6 +348,51 @@ describe('specificity', () => {
 				.toBe(0);
 		});
 	});
+
+	// Real Wikidata descriptions (harvested from en.wikipedia). The geographic abstraction
+	// ladder a position ranking climbs: United Kingdom → Northwestern Europe → Northern
+	// Europe → Continent. NAMED_TITLE wrongly rewards "Northern Europe" as a proper noun;
+	// without isContinentalRegion the climb wins on position + that bonus.
+	describe('penalizes the continental abstraction ladder (country → region → continent)', () => {
+		const sinks: [string, string][] = [
+			['Northwestern Europe', 'Geographical region'],
+			['Northern Europe', 'Northern region of the European continent'],
+			['Western Europe', 'Subregion of the European continent'],
+			['Southern Europe', 'Southern region of Europe'],
+			['Eastern Europe', ''], // empty Wikidata desc — caught by the title rule
+			['Central Asia', 'Subregion of the Asian continent'],
+			['Sub-Saharan Africa', 'Regions south of the Sahara'],
+			['Latin America', 'Region of the Americas'],
+			['North Africa', 'Northernmost region of Africa'],
+			['Europe', 'Continent'],
+			['Continent', 'Large geographical region identified by convention']
+		];
+		for (const [title, description] of sinks) {
+			it(`demotes "${title}" (${description || 'no description'})`, () => {
+				expect(specificity(candidate({ title, description }))).toBeLessThan(0);
+			});
+		}
+	});
+
+	describe('does not demote concrete places that look like regions', () => {
+		// Countries / states whose titles or descriptions brush the region patterns.
+		const keep: [string, string][] = [
+			['South Africa', 'Country in Southern Africa'], // title is <Direction> <Continent>
+			['North Korea', 'Country in East Asia'],
+			['Northern Ireland', 'Part of the United Kingdom'],
+			['West Virginia', 'U.S. state'],
+			['New South Wales', 'State of Australia'],
+			['Central African Republic', 'Country in Central Africa'],
+			['New England', 'Region in the Northeastern United States'], // region scoped to a country
+			['Tuscany', 'Region of Italy'],
+			['Siberia', 'Geographical region of Russia comprising North Asia']
+		];
+		for (const [title, description] of keep) {
+			it(`keeps "${title}" (${description}) non-negative`, () => {
+				expect(specificity(candidate({ title, description }))).toBeGreaterThanOrEqual(0);
+			});
+		}
+	});
 });
 
 describe('scoreCandidate — specificity', () => {
