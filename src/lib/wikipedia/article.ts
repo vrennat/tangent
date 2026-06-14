@@ -78,12 +78,15 @@ export function sanitizeArticleHtml(raw: string): string {
 	// reference list alone can be several hundred KB.
 	html = pruneReferenceSections(html);
 
-	// Tag/wrap the two table-shaped visualizations whose mobile reflow needs more than CSS
-	// can express on its own (the rest — clade, ahnentafel, locmap, … — are pure CSS in
-	// app.css/ReaderCSS.swift). Both target stable class names / inline styles that survive
-	// the stripping above; the actual styling lives in the stylesheets.
+	// Tag/wrap the table-shaped reflows whose mobile layout needs a signal CSS can't derive on
+	// its own — which cell is the sticky label, where the scrollable chart is, whether a grid is
+	// all-text (the rest — clade, ahnentafel, locmap, … — are pure CSS in app.css/ReaderCSS.swift).
+	// All target stable class names / inline styles that survive the stripping above; the actual
+	// styling lives in the stylesheets. Order matters: climate tags weather boxes first so the
+	// wide-table pass skips them.
 	html = reflowClimateTables(html);
 	html = reflowChartTrees(html);
+	html = reflowWideTables(html);
 
 	// Tuck infoboxes into a collapsed "Quick facts" disclosure. The dense fact table
 	// (capital, population, taxonomy, …) is worth keeping, but linearized into our
@@ -278,6 +281,83 @@ function reflowChartTrees(html: string): string {
 	}
 	out.push(html.slice(cursor));
 	return out.join('');
+}
+
+/**
+ * Wide all-text data tables (election results, demographics, sortable rankings, …) — many short
+ * columns of wrappable text. The generic `table{display:block;overflow-x:auto}` rule only scrolls a
+ * table whose min-content exceeds the column; an all-text grid's min-content collapses to its
+ * longest word, so instead of scrolling it squeezes every column to one-word-per-line (an 18-column
+ * results table renders ~7000px tall). We tag such tables `wh-wide` so CSS can set the cells
+ * `white-space:nowrap`, restoring each column's natural width and engaging the existing horizontal
+ * scroll — the desktop wide-table read, on mobile.
+ *
+ * The hazard is the opposite shape: a "document" table with a long prose column (TV episode
+ * summaries, Nobel rationales, a monarch's claim to the throne) — nowrap there explodes one cell
+ * into a multi-thousand-pixel line. So a table is left alone (kept wrapping) when it carries prose,
+ * detected structurally by `isWideGridTable`. A lone full-width footnote/caption banner doesn't
+ * disqualify an otherwise griddy table; CSS lets that one banner wrap (`td[colspan]`).
+ */
+function reflowWideTables(html: string): string {
+	const OPEN = /<table\b[^>]*\bclass="[^"]*\bwikitable\b[^"]*"[^>]*>/gi;
+	const out: string[] = [];
+	let cursor = 0;
+	for (let m = OPEN.exec(html); m; m = OPEN.exec(html)) {
+		const start = m.index;
+		if (start < cursor) continue; // inside an already-emitted table
+		const openEnd = start + m[0].length;
+		// Weather boxes (already wh-climate) own their nowrap+sticky; chart trees aren't .wikitable.
+		if (/\bwh-(?:climate|wide|chart)\b/.test(m[0])) { OPEN.lastIndex = openEnd; continue; }
+		const end = matchingTableEnd(html, start);
+		if (end === -1) continue;
+		const body = html.slice(openEnd, end);
+		if (isWideGridTable(body)) {
+			out.push(html.slice(cursor, start), m[0].replace(/\bclass="/i, 'class="wh-wide '), body);
+			cursor = end;
+			OPEN.lastIndex = end;
+		} else {
+			OPEN.lastIndex = openEnd; // descend: a wide grid may be nested in this layout table
+		}
+	}
+	out.push(html.slice(cursor));
+	return out.join('');
+}
+
+/**
+ * True when a table body is a wide (≥6 column) grid of short cells with no prose column — the
+ * shape that squeezes (see reflowWideTables). Counts cells on the table's own rows only (nested
+ * tables stripped). Width is the median column count over multi-cell rows, so a colspan title or
+ * section-divider banner doesn't inflate it. Long (≥80-char) cells flag prose: one in an ordinary
+ * multi-cell row is prose-in-data (a description column), and two-or-more in lone full-width rows
+ * are a document layout (episode/rationale rows) — either disqualifies. A single lone full-width
+ * long cell is just a footnote/caption and is tolerated. Validated across ~190 wide tables: tags
+ * results/ranking/demographics grids, skips every prose/document table.
+ */
+function isWideGridTable(body: string): boolean {
+	let flat = body;
+	for (let i = 0; i < 6; i++) {
+		const next = flat.replace(/<table\b[^>]*>(?:(?!<table\b)[\s\S])*?<\/table>/gi, '');
+		if (next === flat) break;
+		flat = next;
+	}
+	const rows = flat.match(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi) ?? [];
+	const cols: number[] = [];
+	let normalLong = 0;
+	let loneLong = 0;
+	for (const row of rows) {
+		const cells = row.match(/<(td|th)\b[^>]*>([\s\S]*?)<\/\1>/gi) ?? [];
+		let span = 0;
+		for (const cell of cells) {
+			span += parseInt(/\bcolspan="?(\d+)/i.exec(cell)?.[1] ?? '1', 10) || 1;
+			const text = cell.replace(/<[^>]+>/g, '').replace(/&[a-z]+;/gi, ' ').trim();
+			if (text.length >= 80) cells.length >= 2 ? normalLong++ : loneLong++;
+		}
+		if (cells.length >= 2) cols.push(span);
+	}
+	if (normalLong >= 1 || loneLong >= 2) return false; // prose / document table — keep it wrapping
+	if (cols.length === 0) return false;
+	cols.sort((a, b) => a - b);
+	return cols[Math.floor(cols.length / 2)] >= 6;
 }
 
 /**

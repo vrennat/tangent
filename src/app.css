@@ -1053,3 +1053,22 @@ body::before {
 .wiki-content table.wh-chart td[style*='background'] strong {
 	color: #1b1b1b;
 }
+
+/*
+ * Wide all-text data tables (election results, demographics, sortable rankings, … tagged
+ * table.wh-wide server-side). The generic table rule (display:block; overflow-x:auto) only scrolls
+ * a table whose min-content overflows the column; an all-text grid's min-content collapses to its
+ * longest word, so it squeezes every column to one word per line (an 18-col table renders thousands
+ * of px tall) instead of scrolling. nowrap restores each column's natural width so the existing
+ * scroll engages — the desktop wide-table read on mobile. A lone full-width footnote/caption banner
+ * is the one cell allowed to wrap (server-side detection keeps true prose tables out of wh-wide
+ * entirely). No engine divergence — unlike wh-climate's sticky. Mirrored in ReaderCSS.swift.
+ */
+.wiki-content table.wh-wide th,
+.wiki-content table.wh-wide td {
+	white-space: nowrap;
+}
+.wiki-content table.wh-wide th[colspan],
+.wiki-content table.wh-wide td[colspan] {
+	white-space: normal;
+}

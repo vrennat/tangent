@@ -283,5 +283,12 @@ enum ReaderCSS {
 	table.wh-chart td[style*='background'] a,
 	table.wh-chart td[style*='background'] b,
 	table.wh-chart td[style*='background'] strong { color: #1b1b1b; }
+
+	/* Wide all-text data tables (election results, demographics, rankings, … tagged table.wh-wide
+	   server-side) — nowrap restores each column's natural width so the generic overflow-x scroll
+	   engages instead of squeezing to one word per line. A lone full-width footnote/caption banner
+	   is the one cell allowed to wrap. No engine divergence (unlike wh-climate's sticky). */
+	table.wh-wide th, table.wh-wide td { white-space: nowrap; }
+	table.wh-wide th[colspan], table.wh-wide td[colspan] { white-space: normal; }
 	"""
 }

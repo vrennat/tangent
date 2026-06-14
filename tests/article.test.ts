@@ -231,3 +231,64 @@ describe('sanitizeArticleHtml — chart-tree wrapping', () => {
 		expect(out).not.toContain('wh-chart');
 	});
 });
+
+/**
+ * Wide all-text data tables (election results, demographics, rankings) are tagged `wh-wide` so CSS
+ * can nowrap their cells and let the existing overflow scroll engage, instead of squeezing every
+ * column to one word per line. The detector skips "document" tables with a prose column (a long
+ * cell in an ordinary row, or repeated long full-width rows like episode summaries), which nowrap
+ * would explode — while tolerating a single long full-width footnote/caption banner.
+ */
+const dataRow = (cols: number, val = 'Conservative') =>
+	`<tr>${Array.from({ length: cols }, () => `<td>${val}</td>`).join('')}</tr>`;
+const wikitable = (rows: string) => `<table class="wikitable"><tbody>${rows}</tbody></table>`;
+const longText = 'lorem ipsum '.repeat(12); // ~144 chars, well over the 80-char prose threshold
+
+describe('sanitizeArticleHtml — wide-table tagging', () => {
+	it('tags a wide (>=6 col) all-text grid with wh-wide', () => {
+		const out = sanitizeArticleHtml(wikitable(dataRow(7) + dataRow(7) + dataRow(7)));
+		expect(out).toContain('class="wh-wide wikitable"');
+	});
+
+	it('leaves a narrow (<=5 col) table untouched', () => {
+		const out = sanitizeArticleHtml(wikitable(dataRow(5) + dataRow(5) + dataRow(5)));
+		expect(out).not.toContain('wh-wide');
+	});
+
+	it('skips a table with a long prose cell in an ordinary data row', () => {
+		const proseRow = `<tr><td>a</td><td>${longText}</td><td>c</td><td>d</td><td>e</td><td>f</td></tr>`;
+		const out = sanitizeArticleHtml(wikitable(dataRow(6) + dataRow(6) + proseRow));
+		expect(out).not.toContain('wh-wide');
+	});
+
+	it('skips a document table with repeated long full-width rows (episode-summary shape)', () => {
+		const summary = `<tr><td colspan="6">${longText}</td></tr>`;
+		const out = sanitizeArticleHtml(wikitable(dataRow(6) + summary + dataRow(6) + summary));
+		expect(out).not.toContain('wh-wide');
+	});
+
+	it('tags a wide grid that carries a single long full-width footnote banner', () => {
+		const footnote = `<tr><td colspan="7">${longText}</td></tr>`;
+		const out = sanitizeArticleHtml(wikitable(dataRow(7) + dataRow(7) + dataRow(7) + footnote));
+		expect(out).toContain('wh-wide');
+	});
+
+	it('does not double-tag a weather box (climate pass claims it first)', () => {
+		const wideWeather =
+			'<table class="wikitable"><tbody>' +
+			'<tr><th colspan="14">Climate data for Testville</th></tr>' +
+			`<tr><th>Month</th>${'<th>Jan</th>'.repeat(13)}</tr>` +
+			dataRow(14, '20') +
+			'</tbody></table>';
+		const out = sanitizeArticleHtml(wideWeather);
+		expect(out).toContain('wh-climate');
+		expect(out).not.toContain('wh-wide');
+	});
+
+	it('measures width by data rows, not a colspan title banner', () => {
+		const out = sanitizeArticleHtml(
+			wikitable('<tr><th colspan="9">Some Wide Title Banner</th></tr>' + dataRow(4) + dataRow(4))
+		);
+		expect(out).not.toContain('wh-wide'); // only 4 data columns; the banner doesn't inflate width
+	});
+});
