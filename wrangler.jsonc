@@ -11,15 +11,17 @@
 		"binding": "ASSETS",
 		"directory": ".svelte-kit/cloudflare"
 	},
-	// Accounts: D1 holds users/sessions/passkeys/synced profiles. The `database_id` below
-	// is a placeholder for local dev (Miniflare keys off the binding name); replace it with
-	// the real id from `wrangler d1 create tangent-db` before any remote deploy.
+	// Accounts: D1 holds users/sessions/passkeys/synced profiles.
 	"d1_databases": [
 		{
 			"binding": "DB",
 			"database_name": "tangent-db",
-			"database_id": "00000000-0000-0000-0000-000000000000",
+			"database_id": "7132ea8c-8a8c-4182-ab34-dabf2202341f",
 			"migrations_dir": "migrations"
 		}
-	]
+	],
+	// Native Cloudflare Email Sending — delivers login/recovery codes. `remote: true` lets
+	// `wrangler dev` reach the real Email Service. Requires tangent.page onboarded to Email
+	// Sending in the dashboard (auto-adds SPF/DKIM/DMARC); the `from` is login@tangent.page.
+	"send_email": [{ "name": "EMAIL", "remote": true }]
 }
