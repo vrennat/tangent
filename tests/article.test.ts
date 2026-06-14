@@ -85,3 +85,66 @@ describe('sanitizeArticleHtml — infobox lead-image hoist', () => {
 		});
 	});
 });
+
+/**
+ * Footnote pruning: the citation list is dropped along with the section heading it
+ * lived under, so the reader never shows an empty "References"/"Notes" section — but
+ * a references section that also carries a real bibliography keeps that content.
+ * Inputs mirror the Parsoid shapes seen in the wild (wrap as a direct child, and the
+ * extra classless <div> wrapper {{reflist}} sometimes adds).
+ */
+const refList = (group = '') =>
+	`<div class="mw-references-wrap mw-references-columns"><ol class="mw-references references"${group ? ` data-mw-group="${group}"` : ''}>` +
+	`<li id="cite_note-1"><span class="mw-reference-text">Smith, J. (2019). Octopus cognition.</span></li>` +
+	`</ol></div>`;
+
+describe('sanitizeArticleHtml — footnote pruning', () => {
+	it('drops a pure citation section, heading and list together', () => {
+		const out = sanitizeArticleHtml(
+			`<section data-mw-section-id="9"><h2 id="References">References</h2>${refList()}</section>`
+		);
+		expect(out).not.toContain('References');
+		expect(out).not.toContain('mw-references-wrap');
+		expect(out).not.toContain('Octopus cognition');
+	});
+
+	it('drops a section whose list sits in the extra {{reflist}} <div> wrapper', () => {
+		const out = sanitizeArticleHtml(
+			`<section><h2 id="Notes">Notes</h2><span class="mw-empty-elt"></span><div>\n${refList('lower-alpha')}</div></section>`
+		);
+		expect(out).not.toContain('Notes');
+		expect(out).not.toContain('mw-references-wrap');
+	});
+
+	it('keeps a references section that also holds a bibliography', () => {
+		const out = sanitizeArticleHtml(
+			`<section><h2 id="References">References</h2>${refList()}` +
+				`<section><h3>Works cited</h3><div class="refbegin"><ul><li><cite>Bell, J. S. (1966).</cite></li></ul></div></section>` +
+				`</section>`
+		);
+		expect(out).toContain('References'); // heading survives…
+		expect(out).toContain('Works cited'); // …because the bibliography remains
+		expect(out).toContain('Bell, J. S. (1966).');
+		expect(out).not.toContain('mw-references-wrap'); // but the inline citation list is gone
+		expect(out).not.toContain('Octopus cognition');
+	});
+
+	it('keeps a references section that is itself a {{refbegin}} bibliography', () => {
+		const out = sanitizeArticleHtml(
+			`<section><h2 id="References">References</h2><span class="mw-empty-elt"></span>` +
+				`<div class="refbegin refbegin-columns references-column-width"><ul><li><cite>Allen, M. (1975).</cite></li></ul></div></section>`
+		);
+		expect(out).toContain('References');
+		expect(out).toContain('Allen, M. (1975).');
+	});
+
+	it('leaves content sections (See also, External links) untouched', () => {
+		const out = sanitizeArticleHtml(
+			`<section><h2 id="See_also">See also</h2><ul><li><a href="./Cephalopod">Cephalopod</a></li></ul></section>` +
+				`<section><h2 id="External_links">External links</h2><ul><li><a href="https://example.org">Refuge</a></li></ul></section>`
+		);
+		expect(out).toContain('See also');
+		expect(out).toContain('Cephalopod');
+		expect(out).toContain('External links');
+	});
+});

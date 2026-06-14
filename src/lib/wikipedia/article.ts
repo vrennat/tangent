@@ -73,6 +73,11 @@ export function sanitizeArticleHtml(raw: string): string {
 		(_m, slash: string, level: string) => `<${slash}h${Number(level) + 1}`
 	);
 
+	// Strip the citation apparatus and drop any section it leaves hollow (see below).
+	// Done before infobox wrapping so that pass scans a far smaller document — the
+	// reference list alone can be several hundred KB.
+	html = pruneReferenceSections(html);
+
 	// Tuck infoboxes into a collapsed "Quick facts" disclosure. The dense fact table
 	// (capital, population, taxonomy, …) is worth keeping, but linearized into our
 	// single column it dominates the reading flow — so we preserve it, collapsed.
@@ -152,7 +157,15 @@ function hoistInfoboxImage(table: string): { lead: string; table: string } {
 
 /** Index just past the `</table>` that closes the `<table>` opening at `start`. -1 if unbalanced. */
 function matchingTableEnd(html: string, start: number): number {
-	const TAG = /<(\/?)table\b/gi;
+	return matchingTagEnd(html, start, 'table');
+}
+
+/**
+ * Index just past the close tag balancing the `<tag>` whose open tag starts at `start`.
+ * Counts nested same-name tags by depth (Parsoid emits well-formed XHTML). -1 if unbalanced.
+ */
+function matchingTagEnd(html: string, start: number, tag: string): number {
+	const TAG = new RegExp(`<(/?)${tag}\\b`, 'gi');
 	TAG.lastIndex = start;
 	let depth = 0;
 	for (let t = TAG.exec(html); t; t = TAG.exec(html)) {
@@ -163,6 +176,99 @@ function matchingTableEnd(html: string, start: number): number {
 		}
 	}
 	return -1;
+}
+
+/** Remove every `<tag …>…</tag>` whose open tag matches `openRe`, balancing nesting. */
+function removeBlocks(html: string, openRe: RegExp, tag: string): string {
+	const out: string[] = [];
+	let cursor = 0;
+	for (let m = openRe.exec(html); m; m = openRe.exec(html)) {
+		const start = m.index;
+		if (start < cursor) continue; // already inside a removed block
+		const end = matchingTagEnd(html, start, tag);
+		if (end === -1) continue; // malformed — leave untouched
+		out.push(html.slice(cursor, start));
+		cursor = end;
+		openRe.lastIndex = end;
+	}
+	out.push(html.slice(cursor));
+	return out.join('');
+}
+
+/**
+ * The reader deliberately drops Wikipedia's footnote apparatus — the inline `[1]`
+ * markers (hidden in CSS) and the citation list — as noise that linearizes into a
+ * wall of plumbing in our single column. But the list lived under its own section
+ * heading ("References", "Notes", "Footnotes"), so hiding only the list left the
+ * heading dangling over an empty body. Here we (1) delete the citation apparatus
+ * outright — which also sheds the bulkiest part of the payload, the list itself —
+ * and (2) remove any section that is now hollow.
+ *
+ * Sections that pair a citation list with real content survive: a "References"
+ * section whose body also holds a `{{refbegin}}`/`{{div-col}}` bibliography, or a
+ * nested "Works cited" subsection, keeps that content (now under a non-empty
+ * heading). Plain content sections — "See also", "External links", "Further
+ * reading" — carry no apparatus and are untouched.
+ */
+function pruneReferenceSections(html: string): string {
+	// (1) Delete the apparatus wherever it appears. Wrap first (it contains the <ol>),
+	// then any standalone reflist/citation list left by other templates.
+	html = removeBlocks(html, /<div\b[^>]*\bclass="[^"]*\bmw-references-wrap\b[^"]*"[^>]*>/gi, 'div');
+	html = removeBlocks(html, /<div\b[^>]*\bclass="[^"]*\breflist\b[^"]*"[^>]*>/gi, 'div');
+	html = removeBlocks(html, /<ol\b[^>]*\bclass="[^"]*\breferences\b[^"]*"[^>]*>/gi, 'ol');
+
+	// (2) Drop sections the apparatus removal hollowed out. Leaves first (fixpoint), so a
+	// parent that empties only once its empty children are gone is caught on a later pass.
+	for (;;) {
+		const next = removeEmptyLeafSections(html);
+		if (next === html) break;
+		html = next;
+	}
+	return html;
+}
+
+/** A section's body counts as empty once headings and empty wrappers are shed and no
+ *  text or content-bearing element remains (so a hidden citation list reads as empty,
+ *  but a bibliography list or stray prose does not). */
+function isEmptySectionBody(inner: string): boolean {
+	let body = inner.replace(/<h[1-6]\b[^>]*>[\s\S]*?<\/h[1-6]>/gi, '');
+	for (let prev = ''; prev !== body; ) {
+		prev = body;
+		body = body.replace(/<(div|span|p)\b[^>]*>\s*<\/\1>/gi, '');
+	}
+	if (
+		/<(img|figure|table|ul|ol|dl|li|blockquote|a|cite|b|i|em|strong|sub|sup|hr|dt|dd|tr|td|th|math|audio|video|svg|details|pre|code|caption)\b/i.test(
+			body
+		)
+	)
+		return false;
+	return !/\S/.test(body.replace(/<[^>]+>/g, ''));
+}
+
+/** One pass: remove every leaf `<section>` (no nested section) whose body is empty. */
+function removeEmptyLeafSections(html: string): string {
+	const OPEN = /<section\b[^>]*>/gi;
+	const out: string[] = [];
+	let cursor = 0;
+	for (let m = OPEN.exec(html); m; m = OPEN.exec(html)) {
+		const start = m.index;
+		if (start < cursor) continue;
+		const end = matchingTagEnd(html, start, 'section');
+		if (end === -1) continue;
+		const inner = html.slice(start + m[0].length, end - '</section>'.length);
+		if (/<section\b/i.test(inner)) {
+			// Not a leaf — descend so nested empty sections are still reached this pass.
+			OPEN.lastIndex = start + m[0].length;
+			continue;
+		}
+		if (isEmptySectionBody(inner)) {
+			out.push(html.slice(cursor, start));
+			cursor = end;
+		}
+		OPEN.lastIndex = end;
+	}
+	out.push(html.slice(cursor));
+	return out.join('');
 }
 
 /** Fetch a full article as sanitized, inline-ready HTML. Null if the page is gone. */
