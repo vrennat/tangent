@@ -13,7 +13,7 @@
 	import { page } from '$app/state';
 	import BrandMark from '$lib/components/BrandMark.svelte';
 	import ProfilePanel from '$lib/components/ProfilePanel.svelte';
-	import { Waypoints, SlidersHorizontal, Plus } from '@lucide/svelte';
+	import { Route, SlidersHorizontal, Plus } from '@lucide/svelte';
 	import { profile } from '$lib/engagement/profile.svelte';
 	import { reader } from '$lib/reader/readerState.svelte';
 	import { feed } from '$lib/feed/feedState.svelte';
@@ -105,8 +105,8 @@
 						class="icon-btn relative inline-flex items-center justify-center rounded-full p-1.5
 							text-muted transition-colors hover:bg-surface-2 hover:text-ink"
 					>
-						<!-- Trail: a winding path of waypoints — the route you've walked. -->
-						<Waypoints class="size-5" aria-hidden="true" />
+						<!-- Trail: a winding route between waypoints — the path you've walked. -->
+						<Route class="size-5" aria-hidden="true" />
 						<span
 							class="absolute -right-0.5 -top-0.5 grid h-4 min-w-[1rem] place-items-center
 								rounded-full bg-surface-2 px-1 text-[10px] font-semibold text-muted ring-1 ring-hair"
