@@ -753,11 +753,14 @@ body::before {
    and casualties — into one stacked column. In a 24rem drawer those columns collapse to ~6rem
    and wrap every name into a 3–4 line ribbon; stacked, each group spans the full width and its
    entries fit on one line. Label/value rows carry a `<th>`, so they're excluded and keep their
-   two-column layout. */
-.wiki-content .quick-facts tr:not(:has(th)) {
+   two-column layout. The `:has(td + td)` guard restricts this to rows with 2+ cells: a
+   single-`td` row (the lead image, a full-width banner) has nothing to linearize, and flipping
+   its cell to `display:block` would strip the table layout that lets `margin-inline:auto` center
+   the image — leaving it pinned left. */
+.wiki-content .quick-facts tr:not(:has(th)):has(td + td) {
 	display: block;
 }
-.wiki-content .quick-facts tr:not(:has(th)) > td {
+.wiki-content .quick-facts tr:not(:has(th)):has(td + td) > td {
 	display: block;
 	width: auto !important;
 	/* Drop the inline column dividers (`border-right:1px dotted`) and row rules — once the

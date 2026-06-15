@@ -147,9 +147,11 @@ enum ReaderCSS {
 	/* Linearize all-<td> value rows (combatants/casualties columns) into one stacked column so
 	   names aren't crushed into ~6rem and wrapped to ribbons; label/value (<th>+<td>) rows keep
 	   their two-column layout. The inline column dividers go (a stray vertical hairline once
-	   stacked). Mirrors web app.css. */
-	.quick-facts tr:not(:has(th)) { display: block; }
-	.quick-facts tr:not(:has(th)) > td {
+	   stacked). The :has(td + td) guard limits this to rows with 2+ cells — a single-<td> row (the
+	   lead image, a full-width banner) has nothing to stack, and flipping its cell to display:block
+	   would strip the table layout that centers the image, pinning it left. Mirrors web app.css. */
+	.quick-facts tr:not(:has(th)):has(td + td) { display: block; }
+	.quick-facts tr:not(:has(th)):has(td + td) > td {
 	  display: block; width: auto !important; border: 0 !important; padding-block: 0.15rem;
 	}
 	.hatnote { color: var(--faint); font-style: italic; font-size: 0.85rem; margin-bottom: 0.8em; }
