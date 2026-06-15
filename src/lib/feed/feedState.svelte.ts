@@ -172,12 +172,14 @@ class FeedState {
 	 * article you were reading, so the new card's breadcrumb reads "Dove in from …".
 	 *
 	 * Optimistic: because we already know the destination title, the placeholder card
-	 * is appended SYNCHRONOUSLY and its id returned immediately, so the caller can
-	 * scroll/animate to it before the `/api/card` round trip finishes. The real body
-	 * (and the clickthrough + seen engagement signals, which need the article's tokens)
-	 * is patched in by {@link #resolveCardInto} once it loads.
+	 * is appended SYNCHRONOUSLY and its id returned immediately, so the breadcrumb/trail
+	 * update right away. The real body (and the clickthrough + seen engagement signals,
+	 * which need the article's tokens) is patched in by {@link #resolveCardInto} once it
+	 * loads — its promise is returned as `resolved` so the caller can wait for the card's
+	 * final height before scrolling to it (scrolling to the short placeholder and letting
+	 * it reflow mid-scroll is what made the dive landing flaky).
 	 */
-	beginDive(title: string, fromTitle: string): string {
+	beginDive(title: string, fromTitle: string): { id: string; resolved: Promise<void> } {
 		// New buffered picks were built from the old tip; the dive changes the tip.
 		this.#buffer = [];
 		const placeholder = this.#pendingCard(title, { fromTitle, relation: 'dive' });
@@ -185,8 +187,8 @@ class FeedState {
 		this.trail = [...this.trail, this.#trailNode(placeholder)];
 		if (browser) saveTrail(this.seedTitle ?? '', this.trail);
 		this.status = 'ready';
-		void this.#resolveCardInto(placeholder.id, title, { clickthrough: true });
-		return placeholder.id;
+		const resolved = this.#resolveCardInto(placeholder.id, title, { clickthrough: true });
+		return { id: placeholder.id, resolved };
 	}
 
 	/**

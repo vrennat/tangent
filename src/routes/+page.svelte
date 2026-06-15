@@ -132,7 +132,13 @@
 		});
 	}
 
-	async function goToCard(id: string) {
+	// `settle` lets a caller hold the scroll until an async card body has loaded. Only the
+	// dive passes it, and it's the fix for the long-standing flaky dive landing: a dive
+	// appends a short *pending* placeholder and fetches the article after, so scrolling to
+	// the placeholder targets a position that no longer exists once the body reflows the
+	// page. Waiting for `settle` first means we scroll when the layout is final — the same
+	// as branch/jump, which already `await` their fetch before calling goToCard.
+	async function goToCard(id: string, settle?: Promise<unknown>) {
 		// Navigating to a card means you want to see that card — close the reader first
 		// (it would otherwise stay open over the destination) and let the layout settle
 		// back to one column before scrolling.
@@ -140,9 +146,19 @@
 		reader.close();
 		await tick();
 		await waitForReaderCollapse(wasReaderOpen);
+		// `settle` (the dive's body fetch) is already in flight from before the collapse, so
+		// this usually resolves immediately. Never let a rejected fetch swallow the scroll.
+		if (settle) await settle.catch(() => {});
+		await tick();
+		// Snap instantly on the dive path rather than smooth-scrolling. Waiting for `settle`
+		// above is what actually lands the dive; instant is belt-and-suspenders on top: a
+		// smooth scrollIntoView proved unreliable under test (it would silently never move),
+		// whereas an instant scroll is deterministic and can't be interrupted mid-flight.
+		// The dive already paused for the fetch, so no animation worth keeping is lost. The
+		// other callers keep the nicer smooth scroll.
 		document
-			.querySelector(`[data-card="${id}"]`)
-			?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+			.querySelector(`[data-card="${CSS.escape(id)}"]`)
+			?.scrollIntoView({ behavior: settle ? 'instant' : 'smooth', block: 'start' });
 		landedId = id;
 		clearTimeout(landedTimer);
 		landedTimer = setTimeout(() => (landedId = null), 1600);
@@ -165,11 +181,14 @@
 	// breadcrumb. beginDive feeds the engagement profile (clickthrough + seen) on its own.
 	async function handleDive(title: string) {
 		const fromTitle = reader.current ?? '';
-		reader.close();
-		// beginDive drops a placeholder card synchronously and returns its id, so we scroll
-		// to (and ring) it right away — the landing animation plays while the body loads in.
-		const id = feed.beginDive(title, fromTitle);
-		await goToCard(id);
+		// Don't close the reader here. goToCard captures reader.isOpen to decide whether to
+		// wait for the two-pane collapse before scrolling; closing it first makes that wait a
+		// no-op, so the scroll fires mid-reflow. goToCard closes the reader itself.
+		// beginDive drops a placeholder card synchronously (so the trail updates at once) and
+		// returns `resolved` — the body fetch. Pass it as `settle` so goToCard scrolls only
+		// once the card has its real height, not while the placeholder is still reflowing.
+		const { id, resolved } = feed.beginDive(title, fromTitle);
+		await goToCard(id, resolved);
 	}
 
 	let jumpingRelated = $state(false);
