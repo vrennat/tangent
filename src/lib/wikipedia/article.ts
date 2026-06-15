@@ -34,6 +34,17 @@ export function sanitizeArticleHtml(raw: string): string {
 	// attribute stripping below. Emitted `./` hrefs are resolved by the URL rewrite.
 	html = reflowGraphicalTimelines(html);
 
+	// Shed Parsoid's JSON-blob bookkeeping attributes FIRST. Their values are quote-bounded
+	// JSON that legitimately embeds literal `>` (from transcluded wikitext, refs, inline HTML).
+	// The void-element removers below match with `[^>]*>`, which would stop at the first `>`
+	// INSIDE such a blob — truncating e.g. a `<link>` that carries a whole glossary's
+	// {{term}}/{{defn}} transclusion (deduplicated-templatestyles links do exactly this) and
+	// spilling the rest of the JSON into the page as visible text. Removing the blobs here,
+	// while the tags are still intact, lets the element removers see clean `[^>]*` runs.
+	html = html
+		.replace(/\sdata-mw=("[^"]*"|'[^']*')/gi, '')
+		.replace(/\sdata-parsoid=("[^"]*"|'[^']*')/gi, '');
+
 	html = html
 		// Remove executable / external-resource elements.
 		.replace(/<script[\s\S]*?<\/script>/gi, '')
@@ -43,11 +54,10 @@ export function sanitizeArticleHtml(raw: string): string {
 		.replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
 		// Drop "[edit]" section links.
 		.replace(/<span class="mw-editsection">[\s\S]*?<\/span>/gi, '')
-		// Shed Parsoid bookkeeping attributes (JSON blobs + node ids/typeofs).
+		// Remaining Parsoid bookkeeping (node ids/typeofs). These values hold no `>`, so order
+		// relative to the element removers above doesn't matter.
 		// `id="mw.."` are Parsoid node ids; real anchor ids (cite_note-.., section
 		// names) don't start with "mw", so footnote/section links survive.
-		.replace(/\sdata-mw=("[^"]*"|'[^']*')/gi, '')
-		.replace(/\sdata-parsoid=("[^"]*"|'[^']*')/gi, '')
 		.replace(/\sabout="#mw[^"]*"/gi, '')
 		.replace(/\stypeof="mw:[^"]*"/gi, '')
 		.replace(/\srel="mw:[^"]*"/gi, '')

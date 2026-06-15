@@ -292,3 +292,36 @@ describe('sanitizeArticleHtml — wide-table tagging', () => {
 		expect(out).not.toContain('wh-wide'); // only 4 data columns; the banner doesn't inflate width
 	});
 });
+
+describe('sanitizeArticleHtml — Parsoid JSON-blob attributes', () => {
+	// A deduplicated-templatestyles <link> carries a whole glossary transclusion in its
+	// data-mw. That JSON embeds literal `>` (refs, inline HTML), which used to truncate the
+	// `<link[^>]*>` remover at the first inner `>` and spill the rest of the blob as visible
+	// text — the glossary-rendering bug. The blob must be stripped before the tag is removed.
+	// The blob embeds a literal `>` (inside `<ref ...>`) BEFORE a later "template" token —
+	// the exact shape that made `<link[^>]*>` truncate at the inner `>`. A fixture without
+	// an inner `>` would pass even on the buggy ordering, so this `>` is load-bearing.
+	const GLOSSARY_LINK =
+		'<link rel="mw-deduplicated-inline-style" href="mw-data:TemplateStyles:r1" ' +
+		`typeof="mw:Extension/templatestyles mw:Transclusion" data-mw='{"parts":[{"template":` +
+		`{"target":{"wt":"defn"},"params":{"1":{"wt":"cooling <ref name=\\"s\\">note</ref>"}},"i":0}},` +
+		`{"template":{"target":{"wt":"term"},"params":{"1":{"wt":"adiabat"}},"i":1}}]}'/>`;
+
+	it('removes a <link> whose data-mw JSON contains literal > without spilling JSON as text', () => {
+		const out = sanitizeArticleHtml(`<p>Before</p>${GLOSSARY_LINK}<p>After</p>`);
+		expect(out).not.toContain('"template"'); // the post-`>` tail must not leak
+		expect(out).not.toContain('"parts"');
+		expect(out).not.toContain('<link');
+		expect(out).toContain('<p>Before</p>');
+		expect(out).toContain('<p>After</p>');
+	});
+
+	it('strips data-mw on a retained element (e.g. <sup> ref) without leaking the blob', () => {
+		const out = sanitizeArticleHtml(
+			`<sup class="mw-ref" data-mw='{"name":"ref","body":{"id":"x"}}'>[1]</sup>`
+		);
+		expect(out).not.toContain('data-mw');
+		expect(out).not.toContain('"name"');
+		expect(out).toContain('[1]');
+	});
+});
