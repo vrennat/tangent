@@ -138,6 +138,20 @@ enum ReaderCSS {
 	  background: transparent !important; color: inherit; width: auto !important;
 	}
 	.quick-facts td, .quick-facts th { font-size: 0.85rem; }
+	/* Center a lead/locator-map image in a plain centered colspan cell (older {{Infobox}}
+	   image params) rather than an .infobox-image cell. Mirrors web app.css. */
+	.quick-facts td[colspan] img { display: block; margin-inline: auto; }
+	/* Lists shrink-wrap so a centered cell (casualties summary) moves the whole block, markers
+	   staying attached to their text instead of stranding at the cell's left edge. */
+	.quick-facts td ul, .quick-facts td ol { display: inline-block; text-align: left; margin: 0.25rem 0; }
+	/* Linearize all-<td> value rows (combatants/casualties columns) into one stacked column so
+	   names aren't crushed into ~6rem and wrapped to ribbons; label/value (<th>+<td>) rows keep
+	   their two-column layout. The inline column dividers go (a stray vertical hairline once
+	   stacked). Mirrors web app.css. */
+	.quick-facts tr:not(:has(th)) { display: block; }
+	.quick-facts tr:not(:has(th)) > td {
+	  display: block; width: auto !important; border: 0 !important; padding-block: 0.15rem;
+	}
 	.hatnote { color: var(--faint); font-style: italic; font-size: 0.85rem; margin-bottom: 0.8em; }
 	/* Hide Wikipedia chrome so the reader opens on the article, not a Wikipedia mirror:
 	   editorial furniture plus the sidebar/navbox/citation noise that linearizes into a

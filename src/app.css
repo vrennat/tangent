@@ -722,17 +722,48 @@ body::before {
 	border-radius: 0.375rem;
 	cursor: zoom-in;
 }
-/* Center any infobox image that stays in the drawer — multi-image cells like a
-   country's flag + coat of arms; the single lead image is hoisted out above the
-   disclosure (see hoistInfoboxImage). Mirrors the iOS ReaderCSS treatment. */
+/* Center any infobox image that stays in the drawer — the lead photo / locator map and
+   multi-image cells (a country's flag + coat of arms). Older {{Infobox}} image params emit a
+   plain centered `td[colspan]` rather than an `.infobox-image` cell, and Tailwind's preflight
+   sets `img { display:block }` — so `text-align:center` on the cell no longer centers it (it
+   pins left with margin 0). Center via `margin:auto` on the image itself, which holds for a
+   block image regardless of the cell class. The standard single lead image is hoisted out above
+   the disclosure (see hoistInfoboxImage). Mirrors the iOS ReaderCSS treatment. */
 .wiki-content .quick-facts .infobox-image,
 .wiki-content .quick-facts .infobox-full-data {
 	text-align: center;
 }
 .wiki-content .quick-facts .infobox-image img,
-.wiki-content .quick-facts .infobox-full-data img {
+.wiki-content .quick-facts .infobox-full-data img,
+.wiki-content .quick-facts td[colspan] img {
 	display: block;
 	margin-inline: auto;
+}
+/* Lists in the linearized infobox shrink-wrap to their content so a centered cell (e.g. the
+   casualties summary) moves the whole block as a unit, markers staying attached to their text
+   instead of stranding at the cell's left edge. In a left-aligned label/value cell the list
+   still sits left, unchanged. */
+.wiki-content .quick-facts td ul,
+.wiki-content .quick-facts td ol {
+	display: inline-block;
+	text-align: left;
+	margin: 0.25rem 0;
+}
+/* Linearize multi-value rows — the side-by-side `<td>` columns Wikipedia uses for combatants
+   and casualties — into one stacked column. In a 24rem drawer those columns collapse to ~6rem
+   and wrap every name into a 3–4 line ribbon; stacked, each group spans the full width and its
+   entries fit on one line. Label/value rows carry a `<th>`, so they're excluded and keep their
+   two-column layout. */
+.wiki-content .quick-facts tr:not(:has(th)) {
+	display: block;
+}
+.wiki-content .quick-facts tr:not(:has(th)) > td {
+	display: block;
+	width: auto !important;
+	/* Drop the inline column dividers (`border-right:1px dotted`) and row rules — once the
+	   columns stack, a divider becomes a stray vertical hairline down the full-width block. */
+	border: 0 !important;
+	padding-block: 0.15rem;
 }
 .wiki-content .hatnote {
 	color: var(--color-faint);
