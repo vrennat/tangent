@@ -158,7 +158,12 @@
 			</h2>
 
 			{#if pending}
-				<!-- Body still loading: the title + breadcrumb landed instantly; pulse the rest. -->
+				<!-- Body still loading: the title + breadcrumb landed instantly; pulse the rest.
+				     The dive scrolls to this skeleton immediately and the real body streams in
+				     after, growing the card downward. Keep this skeleton SHORTER than the
+				     shortest real card (3 short lines, no actions row): a taller skeleton would
+				     make the card shrink on resolve, re-clamp the scroll, and jump the landing
+				     spot — the exact flaky dive this fixed. Don't enrich it. -->
 				<div class="mt-3 space-y-2" aria-hidden="true">
 					<div class="h-3 w-full animate-pulse rounded-full bg-surface-2"></div>
 					<div class="h-3 w-full animate-pulse rounded-full bg-surface-2"></div>
