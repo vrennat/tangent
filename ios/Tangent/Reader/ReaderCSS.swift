@@ -109,6 +109,11 @@ enum ReaderCSS {
 	.tmulti .thumbcaption ul, .tmulti .thumbcaption ol {
 	  list-style: none; margin: 0.25em 0 0; padding-left: 0;
 	}
+	/* Inside Quick Facts the panel is narrow — paired tiles produce an inconsistent mix of
+	   full-width singles and narrow side-by-side pairs. Stack all montage rows to full width. */
+	.quick-facts .tmulti .trow { display: block; }
+	.quick-facts .tmulti .thumbimage { width: 100% !important; height: auto !important; }
+	.quick-facts .tmulti .thumbimage img { height: auto; }
 	b, strong { color: var(--ink); }
 	blockquote { margin: 1em 0; padding-left: 1em; border-left: 3px solid var(--hair-strong); color: var(--faint); }
 	hr { border: 0; border-top: 1px solid var(--hair); margin: 1.4em 0; }

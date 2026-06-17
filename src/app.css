@@ -579,6 +579,19 @@ body::before {
 	border-radius: 2px;
 	box-shadow: none;
 }
+/* Inside Quick Facts the panel is ~24rem wide — paired tiles shrink to ~11rem each and
+   produce an inconsistent mix of full-width singles and narrow side-by-side pairs.
+   Stack all montage rows to full width for a uniform column of images. */
+.wiki-content .quick-facts .tmulti .trow {
+	display: block;
+}
+.wiki-content .quick-facts .tmulti .thumbimage {
+	width: 100% !important;
+	height: auto !important;
+}
+.wiki-content .quick-facts .tmulti .thumbimage img {
+	height: auto;
+}
 /* The montage caption enumerates the tiles (one line each) — it reads as a centered
    caption, not a bulleted list. The default disc markers + indent leave bullets
    stranded at the far left while the centered text floats away from them, so drop the
