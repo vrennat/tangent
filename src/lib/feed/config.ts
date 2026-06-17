@@ -27,8 +27,17 @@ export const FEED = {
 	 * Science. This term pulls the feed toward vivid, concrete, named/dated articles
 	 * and away from bare definitional categories. Scaled like position/relevance so it
 	 * reorders within the lead band without overriding a genuinely strong match.
+	 *
+	 * Raised 1.5 -> 2.0 after a cold-start sim sweep (scripts/feed-sim/FINDINGS.md):
+	 * vs lowering positionWeight, this buys the same concreteness gain (Δspecificity
+	 * +0.14) with less than half the lead-depth displacement and half the dead-ends,
+	 * because it targets concreteness directly rather than via deeper/odder links. The
+	 * cost is a mild cold-start topical-diversity dip (ΔTTR -2.8); the relevance taper
+	 * (1/(1+r) in score.ts) confines that to literal cold start — engaged-walk diversity
+	 * is unchanged. Held at 2.0 (not 3.0) to keep the diversity cost and history/biography
+	 * skew contained; 3.0 reintroduces the relevance-lever bubble failure mode.
 	 */
-	specificityWeight: 1.5,
+	specificityWeight: 2.0,
 	/**
 	 * Gentle tiebreaker for candidates that have a lead image. Deliberately small:
 	 * the card leads with the article's hook text, not the picture (Wikipedia images
