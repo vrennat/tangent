@@ -12,3 +12,6 @@ vite.config.ts.timestamp-*
 
 # Worktree-local cache symlink (accidentally committed once)
 .cache
+
+# design-ctx scan snapshot (local diffing only)
+.design-ctx.snapshot.json
