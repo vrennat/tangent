@@ -15,7 +15,31 @@ settings:
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
 
+schemes:
+  Tangent:
+    build:
+      targets:
+        Tangent: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - TangentTests
+
 targets:
+  TangentTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: TangentTests
+    dependencies:
+      - target: Tangent
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: page.tangent.tests
+
   Tangent:
     type: application
     platform: iOS
