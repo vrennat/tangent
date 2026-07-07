@@ -4,7 +4,7 @@ import { FEED } from '$lib/feed/config';
 import { tokenize } from '$lib/feed/tokens';
 import type { TasteId } from '$lib/feed/taste';
 import { normalizeTaste } from '$lib/feed/taste';
-import { applySessionDecay } from './decay';
+import { applyDfDecay, applySessionDecay } from './decay';
 import { type Persisted, EMPTY_PERSISTED, hydratePersisted } from './persisted';
 
 const STORAGE_KEY = 'tangent:profile:v1';
@@ -67,6 +67,11 @@ class EngagementProfile {
 				sessionDecayFloor: FEED.sessionDecayFloor,
 				tokenWeightCap: FEED.avoidTokenWeightCap
 			});
+			this.tokenDocFreq = applyDfDecay(this.tokenDocFreq, FEED.dfSessionDecay, FEED.dfDecayFloor);
+			// The df-dedupe title list would otherwise grow forever; keep the most recent.
+			if (this.#seenForDfTitles.size > FEED.dfSeenTitlesCap) {
+				this.#seenForDfTitles = new Set([...this.#seenForDfTitles].slice(-FEED.dfSeenTitlesCap));
+			}
 			sessionStorage.setItem(FEED.decayStorageKey, '1');
 			this.#save();
 		}

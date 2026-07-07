@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applySessionDecay } from '../src/lib/engagement/decay';
+import { applySessionDecay, applyDfDecay } from '../src/lib/engagement/decay';
 
 const CONFIG = {
 	sessionDecay: 0.85,
@@ -47,6 +47,34 @@ describe('applySessionDecay', () => {
 	describe('empty input', () => {
 		it('returns an empty object for empty input', () => {
 			expect(applySessionDecay({}, CONFIG)).toEqual({});
+		});
+	});
+});
+
+describe('applyDfDecay', () => {
+	describe('decay multiplication', () => {
+		it('multiplies counts by the decay factor', () => {
+			const result = applyDfDecay({ american: 10, century: 4 }, 0.85, 1);
+			expect(result.american).toBeCloseTo(8.5, 5);
+			expect(result.century).toBeCloseTo(3.4, 5);
+		});
+	});
+
+	describe('floor pruning', () => {
+		it('drops counts that fall below the floor (one-off tokens fade out)', () => {
+			// 1 * 0.85 = 0.85 < 1 — a token seen once, sessions ago, is noise.
+			expect(applyDfDecay({ once: 1 }, 0.85, 1).once).toBeUndefined();
+		});
+
+		it('keeps counts at or above the floor', () => {
+			// 2 * 0.85 = 1.7 >= 1 — still real evidence of ubiquity.
+			expect(applyDfDecay({ twice: 2 }, 0.85, 1).twice).toBeCloseTo(1.7, 5);
+		});
+	});
+
+	describe('edge cases', () => {
+		it('returns an empty object for empty input', () => {
+			expect(applyDfDecay({}, 0.85, 1)).toEqual({});
 		});
 	});
 });

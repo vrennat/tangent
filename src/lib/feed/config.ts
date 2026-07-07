@@ -95,6 +95,17 @@ export const FEED = {
 	avoidSessionDecay: 0.65,
 	/** Drop tokens below this floor when decaying — noise that decay brought down this far is useless. */
 	sessionDecayFloor: 0.05,
+	/**
+	 * Session decay for tokenDocFreq, matched to sessionDecay so the DF discount ages
+	 * with the interest weights it discounts. Without it df only ever grows while
+	 * weights stay capped, so relevance fades toward zero for long-lived profiles —
+	 * and the map itself grows without bound (it rides in every /api/next payload).
+	 */
+	dfSessionDecay: 0.85,
+	/** Drop df entries below one document's worth after decay — a token seen once, sessions ago, is noise. */
+	dfDecayFloor: 1,
+	/** Cap the persisted seen-title df-dedupe list (most recent kept) so it can't grow forever. */
+	dfSeenTitlesCap: 500,
 	/** Single token weight ceiling; prevents one obsession from drowning everything else out. */
 	tokenWeightCap: 3,
 	/** Single avoided-token ceiling; keeps skips from permanently burying broad topics. */
