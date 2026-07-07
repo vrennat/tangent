@@ -39,9 +39,15 @@ function pickWeighted(
 }
 
 function paceSlot(ctx: EngineContext): PaceSlot {
-	if (ctx.stepIndex < FEED.pacingColdOpen.length) return FEED.pacingColdOpen[ctx.stepIndex];
-	const loopIndex = (ctx.stepIndex - FEED.pacingColdOpen.length) % FEED.pacingPattern.length;
-	return FEED.pacingPattern[loopIndex];
+	const slot =
+		ctx.stepIndex < FEED.pacingColdOpen.length
+			? FEED.pacingColdOpen[ctx.stepIndex]
+			: FEED.pacingPattern[
+					(ctx.stepIndex - FEED.pacingColdOpen.length) % FEED.pacingPattern.length
+				];
+	// A balanced user has no flavor for the taste slot to boost — substitute so the
+	// slot isn't a no-op.
+	return slot === 'taste' && ctx.taste === 'balanced' ? FEED.pacingBalancedFallback : slot;
 }
 
 function pacedScore(scored: Scored, ctx: EngineContext, slot: PaceSlot): number {

@@ -239,6 +239,19 @@ describe('selectNext', () => {
 			expect(selectNext(pool, ctx)?.candidate.title).toBe('Packet switching');
 		});
 
+		it('substitutes intrigue for the taste slot when taste is balanced', () => {
+			// tasteAffinity is identically 0 for balanced, so without a fallback the
+			// taste slot is a dead spot in the loop for every user who never picked a
+			// flavor. Same pool and step as the explicit-taste test above, balanced.
+			const ctx = context({ stepIndex: 12, rng: seq([0.99, 0]) });
+			const pool = [
+				candidate({ title: 'Canal', description: 'water channel', position: 0 }),
+				candidate({ title: 'Lost city', description: 'abandoned ancient settlement', position: 12 })
+			];
+
+			expect(selectNext(pool, ctx)?.candidate.title).toBe('Lost city');
+		});
+
 		it('uses the intrigue pacing slot to pick a hooky lateral', () => {
 			// Step 13 = regular-loop slot 3 ('intrigue') after the cold open.
 			const ctx = context({ stepIndex: 13, rng: seq([0.99, 0]) });

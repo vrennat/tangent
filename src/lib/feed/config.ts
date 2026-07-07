@@ -121,6 +121,12 @@ export const FEED = {
 	 * restarts from its beginning once these run out.
 	 */
 	pacingColdOpen: ['close', 'intrigue', 'specific', 'close', 'intrigue'] as const,
+	/**
+	 * Slot substituted for 'taste' when the user hasn't picked a flavor: tasteAffinity
+	 * is identically 0 for 'balanced', so the taste slot would otherwise be a dead
+	 * spot in the loop for every user on the default — which is every cold-start user.
+	 */
+	pacingBalancedFallback: 'intrigue' as const,
 	/** Extra boost for the explicit taste slot. */
 	pacingTasteBoost: 1.25,
 	/** Extra boost for the novelty/hook slot. */
