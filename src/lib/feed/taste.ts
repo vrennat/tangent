@@ -137,7 +137,9 @@ export function normalizeTaste(value: unknown): TasteId {
 		: 'balanced';
 }
 
-function textFor(candidate: Candidate): string {
+/** The searchable text of a candidate: title + description + categories. The one
+ *  blob every pattern-based signal (taste, intrigue, politics) matches against. */
+export function candidateText(candidate: Candidate): string {
 	return `${candidate.title} ${candidate.description ?? ''} ${(candidate.categories ?? []).join(' ')}`;
 }
 
@@ -152,15 +154,15 @@ function patternScore(text: string, patterns: WeightedPattern[]): number {
 export function tasteAffinity(candidate: Candidate, taste: TasteId): number {
 	const normalized = normalizeTaste(taste);
 	if (normalized === 'balanced') return 0;
-	return Math.min(2.2, patternScore(textFor(candidate), TASTE_PATTERNS[normalized]));
+	return Math.min(2.2, patternScore(candidateText(candidate), TASTE_PATTERNS[normalized]));
 }
 
 export function curiosity(candidate: Candidate): number {
-	return Math.min(1.4, patternScore(textFor(candidate), CURIOSITY_PATTERNS));
+	return Math.min(1.4, patternScore(candidateText(candidate), CURIOSITY_PATTERNS));
 }
 
 export function intrigue(candidate: Candidate): number {
-	const text = textFor(candidate);
+	const text = candidateText(candidate);
 	const titleBoost = HOOKY_TITLE.test(candidate.title) ? 0.35 : 0;
 	return Math.min(2.6, curiosity(candidate) + patternScore(text, INTRIGUE_PATTERNS) + titleBoost);
 }

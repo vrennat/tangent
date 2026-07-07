@@ -2,8 +2,8 @@ import type { Candidate } from '$lib/wikipedia/types';
 import type { EngineContext } from './types';
 import { FEED } from './config';
 import { isPolitical } from './politics';
-import { intrigue, tasteAffinity } from './taste';
-import { tokenize } from './tokens';
+import { candidateText, intrigue, tasteAffinity } from './taste';
+import { tokenSet } from './tokens';
 
 /** DF-discounted token weight — w / (1 + ln(1 + df)). Same form as TF-IDF's IDF. */
 export function dfWeight(weight: number, df: number): number {
@@ -109,7 +109,10 @@ export function scoreCandidate(candidate: Candidate, ctx: EngineContext): number
 	if (ctx.seenTitles.has(candidate.title)) return -Infinity;
 	if (candidate.isDisambiguation) return -Infinity;
 
-	const tokens = tokenize(`${candidate.title} ${candidate.description ?? ''}`);
+	// Unique tokens: the profile accumulates weights and doc frequency over unique
+	// tokens per article, so scoring counts each token once too — a title token
+	// repeated in the description must not double its relevance or variety hit.
+	const tokens = tokenSet(`${candidate.title} ${candidate.description ?? ''}`);
 
 	let relevance = 0;
 	let avoidance = 0;
@@ -147,9 +150,7 @@ export function scoreCandidate(candidate: Candidate, ctx: EngineContext): number
 	score += FEED.positionWeight * Math.exp(-position / FEED.positionHalfLife);
 
 	// Dampen politics, matching title + description + (when present) categories.
-	const categories = candidate.categories ?? [];
-	const blob = `${candidate.title} ${candidate.description ?? ''} ${categories.join(' ')}`;
-	if (isPolitical(blob)) score += FEED.politicalPenalty;
+	if (isPolitical(candidateText(candidate))) score += FEED.politicalPenalty;
 
 	return score;
 }
@@ -188,9 +189,7 @@ const NEUTRAL_CONTEXT: EngineContext = {
 export function rankSeeds(candidates: Candidate[]): Candidate[] {
 	return candidates
 		.filter((c) => !c.isDisambiguation)
-		.filter(
-			(c) => !isPolitical(`${c.title} ${c.description ?? ''} ${(c.categories ?? []).join(' ')}`)
-		)
+		.filter((c) => !isPolitical(candidateText(c)))
 		.map((candidate) => ({ candidate, score: scoreCandidate(candidate, NEUTRAL_CONTEXT) }))
 		.sort((a, b) => b.score - a.score)
 		.map((entry) => entry.candidate);

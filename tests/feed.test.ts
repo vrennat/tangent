@@ -122,6 +122,31 @@ describe('scoreCandidate', () => {
 		});
 	});
 
+	describe('token deduplication', () => {
+		// The profile builds tokenWeights/tokenDocFreq over UNIQUE tokens per article;
+		// scoring must match, or a candidate whose title token repeats in its own
+		// description gets double relevance (and double variety penalty) for free.
+		it('counts a token shared by title and description once for relevance', () => {
+			const ctx = context({ tokenWeights: { aqueduct: 2 } });
+			const repeated = scoreCandidate(
+				candidate({ title: 'Aqueduct', description: 'stone aqueduct' }),
+				ctx
+			);
+			const single = scoreCandidate(candidate({ title: 'Aqueduct', description: 'stone' }), ctx);
+			expect(repeated).toBeCloseTo(single, 5);
+		});
+
+		it('applies the variety penalty once for a token repeated within a candidate', () => {
+			const ctx = context({ recentTokens: new Set(['aqueduct']) });
+			const repeated = scoreCandidate(
+				candidate({ title: 'Aqueduct', description: 'stone aqueduct' }),
+				ctx
+			);
+			const single = scoreCandidate(candidate({ title: 'Aqueduct', description: 'stone' }), ctx);
+			expect(repeated).toBeCloseTo(single, 5);
+		});
+	});
+
 	describe('political dampening', () => {
 		it('sinks political candidates far below neutral ones', () => {
 			const neutral = scoreCandidate(candidate({ title: 'Volcano', description: 'mountain' }), context());
