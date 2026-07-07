@@ -11,6 +11,7 @@ struct FeedView: View {
 	@State private var readArticle: Article?
 	@State private var showLiked = false
 	@State private var showTaste = false
+	@State private var showTrail = false
 
 	init(profile: EngagementProfile) {
 		self.profile = profile
@@ -61,7 +62,16 @@ struct FeedView: View {
 
 			topBar
 		}
-		.task { if store.cards.isEmpty { await store.start(Seeds.cold().title) } }
+		.task {
+			guard store.cards.isEmpty else { return }
+			if await store.rehydrate() {
+				// Land where the user left off, once the restored pages have laid out.
+				try? await Task.sleep(for: .milliseconds(50))
+				currentID = store.cards.last?.id
+			} else {
+				await store.start(Seeds.cold().title)
+			}
+		}
 		.sensoryFeedback(.selection, trigger: currentID)
 		.fullScreenCover(item: $readArticle) { article in
 			ReaderContainer(
@@ -89,6 +99,17 @@ struct FeedView: View {
 				profile: profile,
 				onChange: { store.retune() },
 				onClose: { showTaste = false }
+			)
+			.presentationDetents([.medium, .large])
+		}
+		.sheet(isPresented: $showTrail) {
+			TrailPanelView(
+				store: store,
+				onSelect: { id in
+					showTrail = false
+					withAnimation { currentID = id }
+				},
+				onClose: { showTrail = false }
 			)
 			.presentationDetents([.medium, .large])
 		}
@@ -166,6 +187,7 @@ struct FeedView: View {
 					.font(Theme.serif(17, .semibold))
 					.foregroundStyle(Theme.ink.opacity(0.85))
 				Spacer()
+				trailButton
 				tasteButton
 				likedButton
 			}
@@ -173,6 +195,18 @@ struct FeedView: View {
 			.padding(.top, 8)
 			Spacer()
 		}
+	}
+
+	/// Opens the trail — where this rabbit hole has been.
+	private var trailButton: some View {
+		Button { showTrail = true } label: {
+			Image(systemName: "point.3.connected.trianglepath.dotted")
+				.font(.system(size: 18))
+				.foregroundStyle(Theme.muted)
+		}
+		.buttonStyle(.plain)
+		.padding(.trailing, 16)
+		.accessibilityLabel("Trail")
 	}
 
 	/// Opens the tangent-flavor picker. Warm when steering is active so the state is

@@ -28,13 +28,23 @@ final class FeedStore {
 
 	private let api = APIClient.shared
 	private let profile: EngagementProfile
+	private let defaults: UserDefaults
 
 	/// How many cards to keep fetched beyond the one currently in view.
 	private let lookahead = 3
 	private let recentWindow = 5
+	/// Trail persistence: revealed chain capped like the web's trailCap; on relaunch the
+	/// most recent few cards are refetched (cold-cache budget) if the trail is fresh.
+	/// The freshness window stands in for the web's sessionStorage lifetime — a trail
+	/// from days ago shouldn't resurrect.
+	private let trailCap = 100
+	private let rehydrateRestoreCap = 8
+	private let trailMaxAge: TimeInterval = 6 * 3600
+	private let trailKey = "tangent.trail.v1"
 
-	init(profile: EngagementProfile) {
+	init(profile: EngagementProfile, defaults: UserDefaults = .standard) {
 		self.profile = profile
+		self.defaults = defaults
 	}
 
 	/// Begin a new rabbit hole from a seed article.
@@ -63,7 +73,57 @@ final class FeedStore {
 	func didReveal(_ card: FeedCard, at index: Int) {
 		lastRevealedIndex = max(lastRevealedIndex, index)
 		profile.recordSeen(card.article)
+		saveTrail()
 		Task { await ensureAhead(from: index) }
+	}
+
+	/// The user-facing trail: cards actually paged to (prefetch excluded), oldest first.
+	var revealedTrail: [FeedCard] {
+		Array(cards.prefix(lastRevealedIndex + 1)).filter { !$0.pending }
+	}
+
+	/// Restore the previous session's chain from the persisted trail. Returns false
+	/// when there is nothing fresh to restore (caller starts a new hole instead).
+	/// Only the most recent nodes are refetched; recordSeen dedupes via the profile's
+	/// persisted seen list, so a restore doesn't double-count df.
+	func rehydrate() async -> Bool {
+		guard let snap = loadTrail(),
+		      Date().timeIntervalSince(snap.savedAt) < trailMaxAge,
+		      !snap.nodes.isEmpty else { return false }
+
+		chainVersion += 1
+		let version = chainVersion
+		status = .loading
+		seedTitle = snap.seedTitle
+
+		let restore = Array(snap.nodes.suffix(rehydrateRestoreCap))
+		let fetched: [Article?] = await withTaskGroup(of: (Int, Article?).self) { group in
+			for (index, node) in restore.enumerated() {
+				group.addTask { [api] in (index, try? await api.card(title: node.title)) }
+			}
+			var out = [Article?](repeating: nil, count: restore.count)
+			for await (index, article) in group { out[index] = article }
+			return out
+		}
+		guard version == chainVersion else { return true }
+
+		var restored: [FeedCard] = []
+		for (node, article) in zip(restore, fetched) {
+			// Fetch misses drop out of the chain (the web keeps them as tombstones in the
+			// panel; here the trail is derived from cards, so they simply vanish).
+			guard let article else { continue }
+			restored.append(makeCard(article, from: node.fromTitle, relation: node.relation))
+		}
+		guard !restored.isEmpty else {
+			status = .idle
+			return false
+		}
+
+		cards = restored
+		lastRevealedIndex = cards.count - 1
+		status = .ready
+		await ensureAhead(from: lastRevealedIndex)
+		return true
 	}
 
 	/// Dive into an in-article link: append the linked article as a fresh card at the tail
@@ -234,5 +294,34 @@ final class FeedStore {
 			id: "\(article.title)#\(counter)", article: article,
 			fromTitle: from, relation: relation, pending: pending
 		)
+	}
+
+	// MARK: - Trail persistence
+
+	private struct TrailSnapshot: Codable {
+		struct Node: Codable {
+			let title: String
+			let relation: Relation
+			let fromTitle: String
+		}
+		let seedTitle: String
+		let nodes: [Node]
+		let savedAt: Date
+	}
+
+	private func saveTrail() {
+		guard let seedTitle, !cards.isEmpty else { return }
+		let nodes = revealedTrail.suffix(trailCap).map {
+			TrailSnapshot.Node(title: $0.article.title, relation: $0.relation, fromTitle: $0.fromTitle)
+		}
+		let snap = TrailSnapshot(seedTitle: seedTitle, nodes: Array(nodes), savedAt: Date())
+		if let data = try? JSONEncoder().encode(snap) {
+			defaults.set(data, forKey: trailKey)
+		}
+	}
+
+	private func loadTrail() -> TrailSnapshot? {
+		guard let data = defaults.data(forKey: trailKey) else { return nil }
+		return try? JSONDecoder().decode(TrailSnapshot.self, from: data)
 	}
 }
