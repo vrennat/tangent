@@ -111,6 +111,18 @@ final class FeedStore {
 		}
 	}
 
+	/// Explicit taste changed: prefetched picks were scored under the old flavor, so
+	/// drop the unrevealed tail and restock from the user's actual position.
+	func retune() {
+		chainVersion += 1
+		if lastRevealedIndex + 1 < cards.count {
+			cards.removeSubrange((lastRevealedIndex + 1)...)
+		}
+		guard status == .ready || status == .exhausted else { return }
+		status = .ready
+		Task { await ensureAhead(from: lastRevealedIndex) }
+	}
+
 	/// Reset a mid-scroll error and try stocking the chain again.
 	func retry() {
 		guard status == .error else { return }

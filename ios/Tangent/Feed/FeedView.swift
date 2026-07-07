@@ -10,6 +10,7 @@ struct FeedView: View {
 	@State private var currentID: String?
 	@State private var readArticle: Article?
 	@State private var showLiked = false
+	@State private var showTaste = false
 
 	init(profile: EngagementProfile) {
 		self.profile = profile
@@ -82,6 +83,14 @@ struct FeedView: View {
 		}
 		.sheet(isPresented: $showLiked) {
 			LikedView(profile: profile) { showLiked = false }
+		}
+		.sheet(isPresented: $showTaste) {
+			TastePickerView(
+				profile: profile,
+				onChange: { store.retune() },
+				onClose: { showTaste = false }
+			)
+			.presentationDetents([.medium, .large])
 		}
 		.preferredColorScheme(.dark)
 	}
@@ -157,12 +166,27 @@ struct FeedView: View {
 					.font(Theme.serif(17, .semibold))
 					.foregroundStyle(Theme.ink.opacity(0.85))
 				Spacer()
+				tasteButton
 				likedButton
 			}
 			.padding(.horizontal, 28)
 			.padding(.top, 8)
 			Spacer()
 		}
+	}
+
+	/// Opens the tangent-flavor picker. Warm when steering is active so the state is
+	/// visible from the feed without opening the sheet.
+	private var tasteButton: some View {
+		let steering = profile.taste != "balanced"
+		return Button { showTaste = true } label: {
+			Image(systemName: "slider.horizontal.3")
+				.font(.system(size: 18))
+				.foregroundStyle(steering ? Theme.accent : Theme.muted)
+		}
+		.buttonStyle(.plain)
+		.padding(.trailing, 16)
+		.accessibilityLabel(steering ? "Tangent flavor: \(profile.taste)" : "Tangent flavor")
 	}
 
 	/// Opens the Liked collection. Fills + warms once you have likes, with a count badge,
