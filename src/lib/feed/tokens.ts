@@ -9,10 +9,11 @@ const STOPWORDS = new Set([
 	'can', 'will', 'would', 'been', 'more', 'most', 'all', 'both', 'each', 'when', 'where'
 ]);
 
-/** Lowercased, de-stopworded word tokens of length >= 3. */
+/** Lowercased, de-stopworded word tokens of length >= 3. Unicode-aware: accented
+ *  letters stay inside their token ("Zürich" is one word, not a fabricated "rich"). */
 export function tokenize(text: string | null | undefined): string[] {
 	if (!text) return [];
-	const matches = text.toLowerCase().match(/[a-z][a-z'-]{2,}/g);
+	const matches = text.toLowerCase().match(/\p{L}[\p{L}'’-]{2,}/gu);
 	if (!matches) return [];
 	return matches.filter((t) => !STOPWORDS.has(t));
 }
