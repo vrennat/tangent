@@ -323,9 +323,25 @@ describe('selectNext', () => {
 			);
 		}
 
+		/** Mildly hooky: enough intrigue to clear the surprise floor, not enough to win
+		 *  an intrigue pacing slot outright — keeps them out of the paced top-K. */
+		function mildHookTail(n: number): Candidate[] {
+			return Array.from({ length: n }, (_, i) =>
+				candidate({
+					title: `Curio ${'ABCDEFGHIJ'[i]}`,
+					description: 'oldest bridge',
+					thumbnail: null,
+					position: 100 + i
+				})
+			);
+		}
+
+		// Steady-state step: past the cold open, past the epsilon schedule ('close' slot).
+		const STEADY_STEP = 10;
+
 		it('fires when RNG falls under the epsilon and the hooky surprise pool is large enough', () => {
 			const pool = [...neutralPool(FEED.topK), ...hookyTail(FEED.surpriseMinPool + 1)];
-			const ctx = context({ rng: seq([0, 0]) });
+			const ctx = context({ stepIndex: STEADY_STEP, rng: seq([0, 0]) });
 			const result = selectNext(pool, ctx);
 			expect(result?.surprised).toBe(true);
 			expect(result?.candidate.title).toMatch(/^Lost article/);
@@ -333,23 +349,48 @@ describe('selectNext', () => {
 
 		it('falls back to normal pick when the hooky surprise pool is too shallow', () => {
 			const pool = [...neutralPool(FEED.topK), ...hookyTail(FEED.surpriseMinPool - 1)];
-			const ctx = context({ rng: seq([0, 0]) });
+			const ctx = context({ stepIndex: STEADY_STEP, rng: seq([0, 0]) });
 			const result = selectNext(pool, ctx);
 			expect(result?.surprised).toBe(false);
 		});
 
 		it('falls back to normal pick when the middle has no strong hooks', () => {
 			const pool = neutralPool(FEED.topK + FEED.surpriseMinPool + 1);
-			const ctx = context({ rng: seq([0, 0]) });
+			const ctx = context({ stepIndex: STEADY_STEP, rng: seq([0, 0]) });
 			const result = selectNext(pool, ctx);
 			expect(result?.surprised).toBe(false);
 		});
 
 		it('never surprises when noSurprise is true, even with rng forcing epsilon', () => {
 			const pool = [...neutralPool(FEED.topK), ...hookyTail(FEED.surpriseMinPool + 1)];
-			const ctx = context({ noSurprise: true, rng: seq([0, 0]) });
+			const ctx = context({ noSurprise: true, stepIndex: STEADY_STEP, rng: seq([0, 0]) });
 			const result = selectNext(pool, ctx);
 			expect(result?.surprised).toBe(false);
+		});
+
+		describe('epsilon schedule', () => {
+			it('never fires on the first card, even with rng at zero', () => {
+				// The user is still orienting; yanking sideways on card one reads as broken.
+				const pool = [...neutralPool(FEED.topK), ...mildHookTail(FEED.surpriseMinPool + 1)];
+				const ctx = context({ stepIndex: 1, rng: seq([0, 0]) });
+				expect(selectNext(pool, ctx)?.surprised).toBe(false);
+			});
+
+			it('fires at the elevated early epsilon during the opening cards', () => {
+				// rng 0.3 is above the steady-state epsilon but below the early one, so
+				// this only fires while the opening schedule is in effect.
+				const pool = [...neutralPool(FEED.topK), ...mildHookTail(FEED.surpriseMinPool + 1)];
+				const ctx = context({ stepIndex: 2, rng: seq([0.3, 0]) });
+				const result = selectNext(pool, ctx);
+				expect(result?.surprised).toBe(true);
+				expect(result?.candidate.title).toMatch(/^Curio/);
+			});
+
+			it('settles back to the steady-state epsilon after the opening cards', () => {
+				const pool = [...neutralPool(FEED.topK), ...mildHookTail(FEED.surpriseMinPool + 1)];
+				const ctx = context({ stepIndex: STEADY_STEP, rng: seq([0.3, 0]) });
+				expect(selectNext(pool, ctx)?.surprised).toBe(false);
+			});
 		});
 
 		it('does not let hookless high scorers crowd hooky candidates out of the surprise pool', () => {
@@ -357,7 +398,11 @@ describe('selectNext', () => {
 			// surprise score outranks the hooky tail, then 4 genuinely hooky candidates.
 			// The mediums are ineligible (zero intrigue) — they must not consume the
 			// surprise pool's top-K slots and starve out the eligible hooky tail.
-			const ctx = context({ tokenWeights: { alpha: 3, beta: 3 }, rng: seq([0, 0]) });
+			const ctx = context({
+				tokenWeights: { alpha: 3, beta: 3 },
+				stepIndex: 10,
+				rng: seq([0, 0])
+			});
 			const fillers = Array.from({ length: FEED.topK }, (_, i) =>
 				candidate({ title: `Filler ${'ABCDEFGHIJ'[i]}`, description: 'alpha beta subject', position: 0 })
 			);
@@ -387,7 +432,7 @@ describe('selectNext', () => {
 			// Run many selections with rng always firing surprise and picking the first entry.
 			// The political one ends up ranked last (heavily penalized); verify it never wins.
 			for (let i = 0; i < 20; i++) {
-				const ctx = context({ rng: seq([0, 0]) });
+				const ctx = context({ stepIndex: 10, rng: seq([0, 0]) });
 				const result = selectNext(pool, ctx);
 				if (result?.surprised) {
 					expect(result.candidate.title).not.toBe(political.title);

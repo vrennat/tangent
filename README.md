@@ -37,7 +37,9 @@ Other scripts: `bun run check` (svelte-check), `bun run test` (vitest), `bun run
    description). Sparse articles fall back to `morelike:` related pages.
 3. **Choose** — the pure feed engine (`src/lib/feed/`) scores candidates by relevance
    (overlap with the user's liked-token interest vector), penalizes monotony, only
-   lightly prefers illustrated cards, and fires a **surprise** epsilon for serendipity.
+   lightly prefers illustrated cards, and fires a **surprise** epsilon for serendipity —
+   front-loaded across the opening cards (after a calm first hop), which also pace
+   hooks ahead of continuity, so a first session shows what the product is early.
    Selection is a softmax-weighted pick among the top scorers, not a robotic argmax.
 4. **Render** — the chosen article's full summary extract leads the card as its hook,
    with a breadcrumb explaining the connection and the image demoted to a small inset.

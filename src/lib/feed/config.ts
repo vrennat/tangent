@@ -65,8 +65,20 @@ export const FEED = {
 	 * (not -Infinity), so they can still appear when nothing else is available.
 	 */
 	politicalPenalty: -500,
-	/** Probability of ignoring relevance and jumping somewhere loosely connected. */
+	/** Steady-state probability of ignoring relevance and jumping somewhere loosely
+	 *  connected. The opening cards use surpriseEpsilonSchedule instead. */
 	surpriseEpsilon: 0.18,
+	/**
+	 * Per-step surprise epsilon for the opening cards (index = stepIndex; beyond the
+	 * array the steady-state surpriseEpsilon applies). Zero on the first card — the
+	 * user is still orienting, and a sideways yank there reads as broken — then
+	 * elevated through the first handful so a first session reliably meets a tangent,
+	 * the moment that shows what the product is, instead of waiting the ~6 cards the
+	 * steady-state epsilon needs in expectation. The pool-quality gates (floor,
+	 * intrigue floor, minPool fall-through) still apply, so a shallow middle never
+	 * turns the elevated epsilon into dud surprises.
+	 */
+	surpriseEpsilonSchedule: [0, 0, 0.35, 0.35, 0.35, 0.35, 0.35] as const,
 	/** Pick the next step by weighted-random among the top-K scorers (not pure argmax). */
 	topK: 8,
 	/** Softmax temperature for that weighted pick. Higher = more random among the top. */
