@@ -152,6 +152,74 @@ final class EngagementProfile {
 		)
 	}
 
+	// MARK: - Account sync
+
+	/// Monotonic mutation counter — bumps on every save(). The sync scheduler compares
+	/// it against `pushedRev` to know whether the server has seen the latest local state.
+	private(set) var rev = 0
+	private var pushedRev = 0
+
+	var pendingSync: Bool { rev != pushedRev }
+
+	/// Mark a rev as pushed. Pass the rev captured at snapshot time (not the current
+	/// one) so edits made while the request was in flight still read as pending.
+	func markPushed(_ rev: Int) {
+		pushedRev = rev
+	}
+
+	/// The web `Persisted` shape this profile syncs as. branchedTitles is always empty
+	/// (no branch feature on iOS) but must travel so a merge never defaults it away.
+	func persistedDTO() -> PersistedDTO {
+		PersistedDTO(
+			likedTitles: Array(likedTitles),
+			clickthroughs: Array(clickthroughs),
+			branchedTitles: [],
+			skippedTitles: Array(skipped.keys),
+			engagedTitles: Array(engaged),
+			tokenWeights: tokenWeights,
+			tokenAvoidWeights: tokenAvoidWeights,
+			taste: taste,
+			dwellMsByTitle: dwellMs,
+			tokenDocFreq: tokenDocFreq,
+			seenCount: seenCount,
+			seenForDfTitles: seenForDfOrder
+		)
+	}
+
+	/// Replace local state with a server profile (login merge / cross-device pull) and
+	/// mark it already-synced so it doesn't echo straight back as a push. Skips adopted
+	/// from other devices carry no token lists (the web shape stores bare titles), so
+	/// their exact avoid-weight undo is unavailable — the weights themselves arrived
+	/// via tokenAvoidWeights. likedArticles keeps local entries; titles liked elsewhere
+	/// are backfilled by the caller (they need a card fetch).
+	func adopt(_ dto: PersistedDTO) {
+		tokenWeights = dto.tokenWeights
+		tokenAvoidWeights = dto.tokenAvoidWeights
+		tokenDocFreq = dto.tokenDocFreq
+		likedTitles = Set(dto.likedTitles)
+		likedArticles = likedArticles.filter { likedTitles.contains($0.title) }
+		taste = dto.taste
+		seenCount = dto.seenCount
+		clickthroughs = Set(dto.clickthroughs)
+		engaged = Set(dto.engagedTitles)
+		skipped = Dictionary(uniqueKeysWithValues: dto.skippedTitles.map { title in
+			(title, skipped[title] ?? [])
+		})
+		seenForDfOrder = dto.seenForDfTitles
+		seenForDf = Set(dto.seenForDfTitles)
+		dwellMs = dto.dwellMsByTitle
+		save()
+		pushedRev = rev
+	}
+
+	/// Backfill a liked article fetched after an adopt (liked on another device).
+	func backfillLikedArticle(_ article: Article) {
+		guard likedTitles.contains(article.title),
+		      !likedArticles.contains(where: { $0.title == article.title }) else { return }
+		likedArticles.append(article)
+		save()
+	}
+
 	// MARK: - Internals
 
 	private func bump(_ tokens: [String], by delta: Double) {
@@ -249,6 +317,7 @@ final class EngagementProfile {
 	}
 
 	private func save() {
+		rev += 1
 		let snap = Snapshot(
 			tokenWeights: tokenWeights, tokenDocFreq: tokenDocFreq,
 			likedTitles: Array(likedTitles), likedArticles: likedArticles,

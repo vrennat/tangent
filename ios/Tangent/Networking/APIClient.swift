@@ -20,9 +20,21 @@ struct APIClient {
 		case transport(Error)
 	}
 
+	/// Keychain key for the bearer session token (`client: 'ios'` login flow — the app
+	/// has no cookie jar, so hooks.server.ts accepts the token as an Authorization header).
+	static let sessionTokenKey = "sessionToken"
+
 	private struct CardResponse: Decodable { let article: Article? }
 	private struct SearchResponse: Decodable { let results: [SearchResult] }
 	private struct ArticleResponse: Decodable { let html: String? }
+	private struct OkResponse: Decodable { let ok: Bool? }
+	private struct MeResponse: Decodable { let user: AccountUser? }
+	private struct VerifyResponse: Decodable {
+		let ok: Bool
+		let user: AccountUser
+		let token: String
+	}
+	private struct ProfileResponse: Decodable { let profile: StoredProfile? }
 
 	/// Build a GET URL for an API path with query items, without force-unwrapping —
 	/// networking is the one place an odd title must degrade to a thrown error, not a crash.
@@ -62,13 +74,82 @@ struct APIClient {
 		return res.results
 	}
 
+	// MARK: - Auth (email-code flow; passkeys need a DEVELOPMENT_TEAM and stay web-only)
+
+	/// POST /api/auth/request-code — always generic `{ ok }` (no account enumeration).
+	func requestCode(email: String) async throws {
+		let _: OkResponse = try await post("api/auth/request-code", body: ["email": email])
+	}
+
+	/// POST /api/auth/verify-code with `client: 'ios'` — returns the bearer token the
+	/// caller stores in the keychain. A 401 means wrong/expired code.
+	func verifyCode(email: String, code: String) async throws -> (user: AccountUser, token: String) {
+		let res: VerifyResponse = try await post(
+			"api/auth/verify-code",
+			body: ["email": email, "code": code, "client": "ios"]
+		)
+		return (res.user, res.token)
+	}
+
+	/// GET /api/auth/me — the account behind the current token, or nil.
+	func me() async throws -> AccountUser? {
+		let res: MeResponse = try await get(url("api/auth/me", []))
+		return res.user
+	}
+
+	/// POST /api/auth/logout — revoke the current session server-side.
+	func logout() async throws {
+		let _: OkResponse = try await post("api/auth/logout", body: [String: String]())
+	}
+
+	// MARK: - Profile sync
+
+	/// GET /api/profile — the stored profile, or nil when the account has never pushed.
+	func getProfile() async throws -> StoredProfile? {
+		let res: ProfileResponse = try await get(url("api/profile", []))
+		return res.profile
+	}
+
+	/// PUT /api/profile — steady-state last-write-wins push.
+	func putProfile(_ data: PersistedDTO) async throws -> StoredProfile {
+		try await sendProfile(data, path: "api/profile", method: "PUT")
+	}
+
+	/// POST /api/profile/merge — first-login union/max reconciliation; adopt the result.
+	func mergeProfile(_ data: PersistedDTO) async throws -> StoredProfile {
+		try await sendProfile(data, path: "api/profile/merge", method: "POST")
+	}
+
+	private func sendProfile(_ data: PersistedDTO, path: String, method: String) async throws -> StoredProfile {
+		var request = URLRequest(url: base.appendingPathComponent(path))
+		request.httpMethod = method
+		request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+		request.httpBody = try encoder.encode(["data": data])
+		let res: ProfileResponse = try await send(request)
+		guard let profile = res.profile else { throw APIError.badStatus(500) }
+		return profile
+	}
+
 	// MARK: - Plumbing
 
 	private func get<T: Decodable>(_ url: URL) async throws -> T {
 		try await send(URLRequest(url: url))
 	}
 
+	private func post<T: Decodable, B: Encodable>(_ path: String, body: B) async throws -> T {
+		var request = URLRequest(url: base.appendingPathComponent(path))
+		request.httpMethod = "POST"
+		request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+		request.httpBody = try encoder.encode(body)
+		return try await send(request)
+	}
+
 	private func send<T: Decodable>(_ request: URLRequest) async throws -> T {
+		var request = request
+		// Attach the session everywhere it exists — public endpoints ignore it.
+		if let token = KeychainStore.get(Self.sessionTokenKey) {
+			request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+		}
 		let data: Data
 		let response: URLResponse
 		do {

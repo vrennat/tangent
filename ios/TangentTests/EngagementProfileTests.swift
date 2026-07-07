@@ -140,4 +140,49 @@ final class EngagementProfileTests: XCTestCase {
 		EngagementProfile(store: defaults).setTaste("oddities")
 		XCTAssertEqual(EngagementProfile(store: defaults).taste, "oddities")
 	}
+
+	// MARK: - Sync
+
+	func testPersistedDTOMatchesTheWebPersistedShapeExactly() throws {
+		// This JSON lands in the shared D1 profiles blob; key drift corrupts merges
+		// with web devices. Mirror of Persisted in src/lib/engagement/persisted.ts.
+		let profile = EngagementProfile(store: try makeDefaults())
+		let data = try JSONEncoder().encode(profile.persistedDTO())
+		let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+		XCTAssertEqual(Set(json.keys), [
+			"likedTitles", "clickthroughs", "branchedTitles", "skippedTitles",
+			"engagedTitles", "tokenWeights", "tokenAvoidWeights", "taste",
+			"dwellMsByTitle", "tokenDocFreq", "seenCount", "seenForDfTitles"
+		])
+	}
+
+	func testAdoptReplacesLocalStateAndMarksSynced() throws {
+		let profile = EngagementProfile(store: try makeDefaults())
+		profile.recordSkip(article("Volcano", tokens: ["volcano"]))
+
+		var dto = profile.persistedDTO()
+		dto.tokenWeights = ["silk": 2.0]
+		dto.taste = "history"
+		dto.likedTitles = ["Silk Road"]
+		dto.skippedTitles = []
+		dto.tokenAvoidWeights = [:]
+		profile.adopt(dto)
+
+		XCTAssertEqual(try XCTUnwrap(profile.tokenWeights["silk"]), 2.0, accuracy: 1e-9)
+		XCTAssertEqual(profile.taste, "history")
+		XCTAssertTrue(profile.isLiked("Silk Road"))
+		XCTAssertTrue(profile.tokenAvoidWeights.isEmpty)
+		XCTAssertFalse(profile.pendingSync) // adopted state must not echo back as a push
+	}
+
+	func testMutationAfterPushReadsAsPending() throws {
+		let profile = EngagementProfile(store: try makeDefaults())
+		let rev = profile.rev
+		profile.markPushed(rev)
+		XCTAssertFalse(profile.pendingSync)
+
+		profile.setTaste("nature")
+		XCTAssertTrue(profile.pendingSync)
+	}
 }

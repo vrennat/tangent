@@ -6,15 +6,18 @@ import SwiftUI
 struct FeedView: View {
 	@State private var store: FeedStore
 	private let profile: EngagementProfile
+	private let account: AccountStore
 
 	@State private var currentID: String?
 	@State private var readArticle: Article?
 	@State private var showLiked = false
 	@State private var showTaste = false
 	@State private var showTrail = false
+	@State private var showAccount = false
 
-	init(profile: EngagementProfile) {
+	init(profile: EngagementProfile, account: AccountStore) {
 		self.profile = profile
+		self.account = account
 		_store = State(initialValue: FeedStore(profile: profile))
 	}
 
@@ -113,6 +116,14 @@ struct FeedView: View {
 			)
 			.presentationDetents([.medium, .large])
 		}
+		.sheet(isPresented: $showAccount) {
+			AccountView(account: account) {
+				showAccount = false
+				// Closing the sheet after a login is a natural flush point.
+				Task { await account.syncNow() }
+			}
+			.presentationDetents([.medium, .large])
+		}
 		.preferredColorScheme(.dark)
 	}
 
@@ -190,11 +201,24 @@ struct FeedView: View {
 				trailButton
 				tasteButton
 				likedButton
+				accountButton
 			}
 			.padding(.horizontal, 28)
 			.padding(.top, 8)
 			Spacer()
 		}
+	}
+
+	/// Opens sign-in / account. Warm when signed in (profile is syncing).
+	private var accountButton: some View {
+		Button { showAccount = true } label: {
+			Image(systemName: account.isSignedIn ? "person.crop.circle.fill" : "person.crop.circle")
+				.font(.system(size: 18))
+				.foregroundStyle(account.isSignedIn ? Theme.accent : Theme.muted)
+		}
+		.buttonStyle(.plain)
+		.padding(.leading, 16)
+		.accessibilityLabel(account.isSignedIn ? "Account, signed in" : "Sign in")
 	}
 
 	/// Opens the trail — where this rabbit hole has been.
