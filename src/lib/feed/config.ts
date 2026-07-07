@@ -112,6 +112,15 @@ export const FEED = {
 	avoidTokenWeightCap: 1.8,
 	/** Five-card pacing loop: continuity, continuity, taste, novelty, specificity. */
 	pacingPattern: ['close', 'close', 'taste', 'intrigue', 'specific'] as const,
+	/**
+	 * Cold-open pacing for the opening steps (index = stepIndex; index 0 aligns with
+	 * the seed, so clients that build from step 1 never hit it). At step 1 every
+	 * candidate is one hop from the seed — closeness is guaranteed by construction —
+	 * so the regular loop's close/close/taste start wastes the first impression on
+	 * continuity the pool already provides. Open on hooks instead; the regular loop
+	 * restarts from its beginning once these run out.
+	 */
+	pacingColdOpen: ['close', 'intrigue', 'specific', 'close', 'intrigue'] as const,
 	/** Extra boost for the explicit taste slot. */
 	pacingTasteBoost: 1.25,
 	/** Extra boost for the novelty/hook slot. */

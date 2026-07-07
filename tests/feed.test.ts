@@ -224,7 +224,8 @@ describe('selectNext', () => {
 		});
 
 		it('uses the taste pacing slot to lean harder into explicit flavor', () => {
-			const ctx = context({ taste: 'technology', stepIndex: 2, rng: seq([0.99, 0]) });
+			// Step 12 = regular-loop slot 2 ('taste') once the cold open (steps 0-4) has passed.
+			const ctx = context({ taste: 'technology', stepIndex: 12, rng: seq([0.99, 0]) });
 			const pool = [
 				candidate({ title: 'Canal', description: 'water channel', position: 0 }),
 				candidate({
@@ -239,7 +240,8 @@ describe('selectNext', () => {
 		});
 
 		it('uses the intrigue pacing slot to pick a hooky lateral', () => {
-			const ctx = context({ stepIndex: 3, rng: seq([0.99, 0]) });
+			// Step 13 = regular-loop slot 3 ('intrigue') after the cold open.
+			const ctx = context({ stepIndex: 13, rng: seq([0.99, 0]) });
 			const pool = [
 				candidate({ title: 'Canal', description: 'water channel', position: 0 }),
 				candidate({ title: 'Lost city', description: 'abandoned ancient settlement', position: 12 })
@@ -249,10 +251,36 @@ describe('selectNext', () => {
 		});
 
 		it('uses the specificity pacing slot to prefer vivid concrete articles', () => {
-			const ctx = context({ stepIndex: 4, rng: seq([0.99, 0]) });
+			// Step 14 = regular-loop slot 4 ('specific') after the cold open.
+			const ctx = context({ stepIndex: 14, rng: seq([0.99, 0]) });
 			const pool = [
 				candidate({ title: 'Entity', description: 'Something that exists', position: 0 }),
 				candidate({ title: 'New Orleans', description: 'city founded in 1718', position: 10 })
+			];
+
+			expect(selectNext(pool, ctx)?.candidate.title).toBe('New Orleans');
+		});
+	});
+
+	describe('cold open', () => {
+		// At step 1 every candidate is one hop from the seed — closeness is guaranteed
+		// by construction — so the opening steps spend their slots on hooks instead of
+		// the regular loop's close/close/taste start.
+		it('opens on an intrigue slot: step 1 prefers a hooky lateral over the prominent link', () => {
+			const ctx = context({ stepIndex: 1, rng: seq([0.99, 0]) });
+			const pool = [
+				candidate({ title: 'Canal', description: 'water channel', position: 0 }),
+				candidate({ title: 'Lost city', description: 'abandoned ancient settlement', position: 12 })
+			];
+
+			expect(selectNext(pool, ctx)?.candidate.title).toBe('Lost city');
+		});
+
+		it('follows with a specificity slot: step 2 prefers a vivid dated article', () => {
+			const ctx = context({ stepIndex: 2, rng: seq([0.99, 0]) });
+			const pool = [
+				candidate({ title: 'Canal', description: 'water channel', position: 0 }),
+				candidate({ title: 'New Orleans', description: 'city founded in 1718', position: 50 })
 			];
 
 			expect(selectNext(pool, ctx)?.candidate.title).toBe('New Orleans');

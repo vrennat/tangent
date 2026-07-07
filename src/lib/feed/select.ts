@@ -39,7 +39,9 @@ function pickWeighted(
 }
 
 function paceSlot(ctx: EngineContext): PaceSlot {
-	return FEED.pacingPattern[ctx.stepIndex % FEED.pacingPattern.length];
+	if (ctx.stepIndex < FEED.pacingColdOpen.length) return FEED.pacingColdOpen[ctx.stepIndex];
+	const loopIndex = (ctx.stepIndex - FEED.pacingColdOpen.length) % FEED.pacingPattern.length;
+	return FEED.pacingPattern[loopIndex];
 }
 
 function pacedScore(scored: Scored, ctx: EngineContext, slot: PaceSlot): number {
