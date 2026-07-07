@@ -3,7 +3,7 @@ import type { EngineContext, Selection } from './types';
 import { FEED } from './config';
 import { scoreCandidate, specificity } from './score';
 import { isPolitical } from './politics';
-import { intrigue, tasteAffinity } from './taste';
+import { candidateText, intrigue, tasteAffinity } from './taste';
 
 type PaceSlot = (typeof FEED.pacingPattern)[number];
 type Scored = { candidate: Candidate; score: number };
@@ -62,12 +62,26 @@ function rankedForSlot(scored: Scored[], ctx: EngineContext): Ranked[] {
 		.sort((a, b) => b.selectionScore - a.selectionScore);
 }
 
+/**
+ * The surprise pool: mid-tier candidates with a strong hook, enough base quality,
+ * and low political risk, ranked by hook-boosted score and capped at surpriseTopK.
+ *
+ * Eligibility is filtered BEFORE the cap. Filtering after would let hookless
+ * high scorers (strong relevance/position, zero intrigue) occupy the capped slots
+ * and then be discarded — starving out eligible hooky candidates further down and
+ * silently killing surprises the epsilon meant to fire.
+ */
 function surpriseRanked(scored: Scored[], excludedTitles: Set<string>): Ranked[] {
 	return scored
-		.filter((s) => !excludedTitles.has(s.candidate.title))
-		.map((s) => ({
+		.filter((s) => !excludedTitles.has(s.candidate.title) && s.score >= FEED.surpriseFloor)
+		.map((s) => ({ scored: s, hook: intrigue(s.candidate) }))
+		.filter(
+			({ scored: s, hook }) =>
+				hook >= FEED.surpriseIntrigueFloor && !isPolitical(candidateText(s.candidate))
+		)
+		.map(({ scored: s, hook }) => ({
 			...s,
-			selectionScore: s.score + FEED.surpriseIntrigueBoost * intrigue(s.candidate)
+			selectionScore: s.score + FEED.surpriseIntrigueBoost * hook
 		}))
 		.sort((a, b) => b.selectionScore - a.selectionScore)
 		.slice(0, FEED.surpriseTopK);
@@ -89,9 +103,8 @@ export function selectNext(candidates: Candidate[], ctx: EngineContext): Selecti
 	const pool = eligible(candidates, ctx);
 	if (pool.length === 0) return null;
 
-	const scored = pool
-		.map((candidate) => ({ candidate, score: scoreCandidate(candidate, ctx) }))
-		.sort((a, b) => b.score - a.score);
+	// Selection order is owned by rankedForSlot / surpriseRanked; no pre-sort needed.
+	const scored = pool.map((candidate) => ({ candidate, score: scoreCandidate(candidate, ctx) }));
 
 	const ranked = rankedForSlot(scored, ctx);
 	const topKScored = ranked.slice(0, FEED.topK);
@@ -101,15 +114,7 @@ export function selectNext(candidates: Candidate[], ctx: EngineContext): Selecti
 		// hook, enough base quality, and low political risk. Surprise should read as
 		// "wait, what?" rather than an unscored random page from the middle.
 		const excluded = new Set(topKScored.map((s) => s.candidate.title));
-		const surprisePool = surpriseRanked(scored, excluded)
-			.filter((s) => {
-				const blob = `${s.candidate.title} ${s.candidate.description ?? ''} ${(s.candidate.categories ?? []).join(' ')}`;
-				return (
-					s.score >= FEED.surpriseFloor &&
-					intrigue(s.candidate) >= FEED.surpriseIntrigueFloor &&
-					!isPolitical(blob)
-				);
-			});
+		const surprisePool = surpriseRanked(scored, excluded);
 
 		// If the pool is too shallow, fall through to normal picks — a dud surprise is worse than none.
 		if (surprisePool.length >= FEED.surpriseMinPool) {

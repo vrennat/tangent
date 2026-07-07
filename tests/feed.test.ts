@@ -311,6 +311,27 @@ describe('selectNext', () => {
 			expect(result?.surprised).toBe(false);
 		});
 
+		it('does not let hookless high scorers crowd hooky candidates out of the surprise pool', () => {
+			// 8 top-K fillers, then 10 relevance-strong but hookless "mediums" whose
+			// surprise score outranks the hooky tail, then 4 genuinely hooky candidates.
+			// The mediums are ineligible (zero intrigue) — they must not consume the
+			// surprise pool's top-K slots and starve out the eligible hooky tail.
+			const ctx = context({ tokenWeights: { alpha: 3, beta: 3 }, rng: seq([0, 0]) });
+			const fillers = Array.from({ length: FEED.topK }, (_, i) =>
+				candidate({ title: `Filler ${'ABCDEFGHIJ'[i]}`, description: 'alpha beta subject', position: 0 })
+			);
+			const mediums = Array.from({ length: FEED.surpriseTopK }, (_, i) =>
+				candidate({ title: `Medium ${'ABCDEFGHIJ'[i]}`, description: 'alpha beta subject', position: 30 })
+			);
+			const hooky = Array.from({ length: FEED.surpriseMinPool + 1 }, (_, i) =>
+				candidate({ title: `Curio ${'ABCDEFGHIJ'[i]}`, description: 'oldest bridge', position: 100 })
+			);
+
+			const result = selectNext([...fillers, ...mediums, ...hooky], ctx);
+			expect(result?.surprised).toBe(true);
+			expect(result?.candidate.title).toMatch(/^Curio/);
+		});
+
 		it('excludes political candidates from the surprise pool', () => {
 			// Build a large pool; mix in a political candidate near the bottom of scores.
 			// With rng always triggering surprise, it should never be the pick.
