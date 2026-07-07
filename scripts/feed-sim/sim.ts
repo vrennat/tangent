@@ -258,7 +258,16 @@ interface JourneyResult {
 	persona: Persona;
 	arm: 'adaptive' | 'control';
 	rngSeed: number;
-	path: { title: string; surprised: boolean; onInterest: boolean; tier: 'core' | 'broad' | null }[];
+	/** intrigue/spec are the engine's own hook/concreteness reads of each served card,
+	 *  recorded at walk time so cold-open feel is measurable offline. */
+	path: {
+		title: string;
+		surprised: boolean;
+		onInterest: boolean;
+		tier: 'core' | 'broad' | null;
+		intrigue: number;
+		spec: number;
+	}[];
 	firstCoreStep: number | null; // step index (1-based among non-seed cards) of first core hit, else null
 	firstBroadStep: number | null;
 	sinkLandings: {
@@ -363,7 +372,14 @@ async function runJourney(
 			if (firstBroadStep === null) firstBroadStep = step;
 		}
 
-		path.push({ title: c.title, surprised: sel.surprised, onInterest, tier });
+		path.push({
+			title: c.title,
+			surprised: sel.surprised,
+			onInterest,
+			tier,
+			intrigue: intrigue(c),
+			spec: specificity(c)
+		});
 		react(c.title, c.description, persona);
 		visited.push({ title: c.title, description: c.description });
 		seenTitles.add(c.title);

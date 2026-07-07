@@ -1,7 +1,14 @@
 /** Aggregate sim journeys into the two answers + a sink-leak diagnostic. */
 import { readFileSync, writeFileSync } from 'node:fs';
 
-interface PathStep { title: string; surprised: boolean; onInterest: boolean; tier: 'core' | 'broad' | null }
+interface PathStep {
+	title: string;
+	surprised: boolean;
+	onInterest: boolean;
+	tier: 'core' | 'broad' | null;
+	intrigue?: number;
+	spec?: number;
+}
 interface Journey {
 	seed: string;
 	persona: string;
@@ -159,6 +166,42 @@ for (const [label, t] of [['early', 0], ['middle', 1], ['late', 2]] as const) {
 	out += `| ${label} | ${pct(mean(c))} ±${pct(ci95(c))} | ${pct(mean(a))} ±${pct(ci95(a))} |\n`;
 }
 out += `\n`;
+
+// ============================================================================
+// Cold open — opening-card feel (cold-start arm). Path index i = the card
+// chosen at engine stepIndex i+1: entries 0-4 are what the opening pacing and
+// epsilon schedule govern; index >= 6 is steady state.
+// ============================================================================
+out += `## Cold open — opening-card feel (cold-start)\n\n`;
+{
+	const firstSurprise = (j: Journey) => {
+		const i = j.path.findIndex((p) => p.surprised);
+		return i === -1 ? null : i + 1;
+	};
+	const frac = (f: (j: Journey) => boolean) =>
+		coldStart.filter(f).length / Math.max(1, coldStart.length);
+	out += `| metric | value |\n|---|---|\n`;
+	out += `| surprise on card 1 | ${pct(frac((j) => firstSurprise(j) === 1))} |\n`;
+	out += `| surprise within 5 cards | ${pct(frac((j) => { const s = firstSurprise(j); return s !== null && s <= 5; }))} |\n`;
+	out += `| any cluster by step 5 | ${pct(frac((j) => j.firstBroadStep !== null && j.firstBroadStep <= 5))} |\n`;
+	if (coldStart.some((j) => j.path.some((p) => p.intrigue !== undefined))) {
+		const perJourney = (lo: number, hi: number, key: 'intrigue' | 'spec') =>
+			coldStart
+				.map((j) => j.path.slice(lo, hi))
+				.filter((s) => s.length > 0)
+				.map((s) => mean(s.map((p) => p[key] ?? 0)));
+		const early = perJourney(0, 5, 'intrigue');
+		const late = perJourney(6, Number.MAX_SAFE_INTEGER, 'intrigue');
+		const spec5 = perJourney(0, 5, 'spec');
+		out += `| mean intrigue, cards 1-5 | ${mean(early).toFixed(2)} ±${ci95(early).toFixed(2)} |\n`;
+		out += `| mean intrigue, cards 7+ | ${mean(late).toFixed(2)} ±${ci95(late).toFixed(2)} |\n`;
+		out += `| mean specificity, cards 1-5 | ${mean(spec5).toFixed(2)} ±${ci95(spec5).toFixed(2)} |\n`;
+	}
+	const steady = coldStart.flatMap((j) => j.path.slice(6));
+	if (steady.length)
+		out += `| steady surprise rate (7+) | ${pct(steady.filter((p) => p.surprised).length / steady.length)} |\n`;
+	out += `\n`;
+}
 
 // avg path length / dead ends
 const lens = J.map((j) => j.path.length);

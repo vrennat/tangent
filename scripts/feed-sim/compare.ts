@@ -1,7 +1,15 @@
-/** Compare two result sets (baseline vs new config) on the metrics that matter. */
+/** Compare two result sets (baseline vs new config) on the metrics that matter.
+ *  Usage: bun run compare.ts "one-line description of the config change" */
 import { readFileSync } from 'node:fs';
 
-interface PathStep { title: string; onInterest: boolean; tier: 'core' | 'broad' | null }
+interface PathStep {
+	title: string;
+	onInterest: boolean;
+	tier: 'core' | 'broad' | null;
+	surprised?: boolean;
+	intrigue?: number;
+	spec?: number;
+}
 interface Journey {
 	seed: string; persona: string; arm: 'adaptive' | 'control'; rngSeed: number;
 	path: PathStep[]; firstCoreStep: number | null; firstBroadStep: number | null;
@@ -20,7 +28,58 @@ const coldStart = (J: Journey[]) => J.filter((j) => j.arm === 'control' && j.per
 const personas = [...new Set(A.filter((j) => j.persona !== 'balanced').map((j) => j.persona))];
 
 console.log('# Baseline vs New config\n');
-console.log('relevanceWeight 2.5->4.0 ; +AUTHORITARIAN_STEMS (nazi/hitler/fascis/holocaust/wehrmacht/gestapo/third reich/dictator/totalitarian/genocide/world war)\n');
+console.log(`${process.argv[2] ?? '(pass a change description as argv[2])'}\n`);
+
+// ----------------------------------------------------------------------------
+// Cold open — opening-card feel (cold-start balanced arm). Path index i is the
+// card chosen at engine stepIndex i+1, so the first 5 entries are the cards the
+// opening pacing/epsilon schedule governs and index >= 6 is steady state.
+// ----------------------------------------------------------------------------
+console.log('## Cold open — opening-card feel (cold-start balanced, n=' + coldStart(A).length + '/arm)');
+{
+	const csA = coldStart(A);
+	const csB = coldStart(B);
+	const firstSurprise = (j: Journey) => {
+		const i = j.path.findIndex((p) => p.surprised);
+		return i === -1 ? null : i + 1;
+	};
+	const frac = (J: Journey[], f: (j: Journey) => boolean) =>
+		J.filter(f).length / Math.max(1, J.length);
+	const fracRows: [string, (j: Journey) => boolean][] = [
+		['surprise on card 1', (j) => firstSurprise(j) === 1],
+		['surprise within 5 cards', (j) => { const s = firstSurprise(j); return s !== null && s <= 5; }],
+		['any cluster by step 5', (j) => j.firstBroadStep !== null && j.firstBroadStep <= 5]
+	];
+	for (const [label, f] of fracRows)
+		console.log(`  ${label.padEnd(28)} ${pct(frac(csA, f))}  ->  ${pct(frac(csB, f))}`);
+
+	const hasHooks = (J: Journey[]) => J.some((j) => j.path.some((p) => p.intrigue !== undefined));
+	if (hasHooks(csA) && hasHooks(csB)) {
+		const perJourney = (J: Journey[], lo: number, hi: number, key: 'intrigue' | 'spec') =>
+			J.map((j) => j.path.slice(lo, hi))
+				.filter((s) => s.length > 0)
+				.map((s) => mean(s.map((p) => p[key] ?? 0)));
+		const hookRows: [string, number, number, 'intrigue' | 'spec'][] = [
+			['mean intrigue, cards 1-5', 0, 5, 'intrigue'],
+			['mean intrigue, cards 7+', 6, Number.MAX_SAFE_INTEGER, 'intrigue'],
+			['mean specificity, cards 1-5', 0, 5, 'spec']
+		];
+		for (const [label, lo, hi, key] of hookRows) {
+			const a = perJourney(csA, lo, hi, key);
+			const b = perJourney(csB, lo, hi, key);
+			console.log(
+				`  ${label.padEnd(28)} ${mean(a).toFixed(2)}±${ci(a).toFixed(2)}  ->  ${mean(b).toFixed(2)}±${ci(b).toFixed(2)}`
+			);
+		}
+	} else {
+		console.log('  (per-step intrigue/spec missing in a result set — rerun sim.ts to record them)');
+	}
+	const steadyRate = (J: Journey[]) => {
+		const s = J.flatMap((j) => j.path.slice(6));
+		return s.length ? s.filter((p) => p.surprised).length / s.length : 0;
+	};
+	console.log(`  ${'steady surprise rate (7+)'.padEnd(28)} ${pct(steadyRate(csA))}  ->  ${pct(steadyRate(csB))}\n`);
+}
 
 console.log('## Goal 2 — cluster drift (cold-start balanced, n=' + coldStart(A).length + ')');
 for (const [label, sel] of [
