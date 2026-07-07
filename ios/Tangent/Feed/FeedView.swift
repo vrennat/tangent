@@ -49,6 +49,15 @@ struct FeedView: View {
 				overlayState
 			}
 
+			// A mid-scroll failure must not be silent — without this the feed just stops
+			// producing cards and reads as broken.
+			if store.status == .error && !store.cards.isEmpty {
+				VStack {
+					Spacer()
+					errorBanner
+				}
+			}
+
 			topBar
 		}
 		.task { if store.cards.isEmpty { await store.start(Seeds.cold().title) } }
@@ -57,15 +66,15 @@ struct FeedView: View {
 			ReaderContainer(
 				rootTitle: article.title,
 				onDive: { title in
-					// Card-based dive: close the reader, drop the linked article as a fresh
-					// card at the tail, then page to it — the feed stays the rabbit hole.
+					// Card-based dive: close the reader, drop an optimistic placeholder at
+					// the tail, and page to it at once — the body streams in behind the
+					// landing animation instead of before it.
 					readArticle = nil
+					let id = store.dive(into: title, from: article.title)
 					Task {
-						if let id = await store.dive(into: title, from: article.title) {
-							// Let the new page materialize before snapping the pager to it.
-							try? await Task.sleep(for: .milliseconds(50))
-							withAnimation { currentID = id }
-						}
+						// Let the new page materialize before snapping the pager to it.
+						try? await Task.sleep(for: .milliseconds(50))
+						withAnimation { currentID = id }
 					}
 				},
 				onClose: { readArticle = nil }
@@ -92,11 +101,53 @@ struct FeedView: View {
 		}
 	}
 
+	/// Dead-end recovery: offer one lateral hop before the full restart, mirroring the
+	/// web's jumpRelated-then-start-over ladder.
 	private var exhaustedFooter: some View {
-		VStack(spacing: 12) {
-			Text("End of the rabbit hole").font(Theme.serif(22)).foregroundStyle(Theme.ink)
-			Text("for now").font(Theme.serif(16)).italic().foregroundStyle(Theme.muted)
+		VStack(spacing: 20) {
+			VStack(spacing: 8) {
+				Text("End of the rabbit hole").font(Theme.serif(22)).foregroundStyle(Theme.ink)
+				Text("for now").font(Theme.serif(16)).italic().foregroundStyle(Theme.muted)
+			}
+			Button {
+				Task {
+					if let id = await store.jumpRelated() {
+						try? await Task.sleep(for: .milliseconds(50))
+						withAnimation { currentID = id }
+					}
+				}
+			} label: {
+				Text("Jump somewhere related")
+					.font(Theme.ui(15, .medium))
+					.foregroundStyle(Theme.accent)
+			}
+			.buttonStyle(.plain)
+			Button {
+				Task { await store.start(Seeds.random(excluding: store.seedTitle).title) }
+			} label: {
+				Text("Start a new hole")
+					.font(Theme.ui(15, .medium))
+					.foregroundStyle(Theme.muted)
+			}
+			.buttonStyle(.plain)
 		}
+	}
+
+	private var errorBanner: some View {
+		HStack(spacing: 12) {
+			Text("Connection hiccup")
+				.font(Theme.ui(14))
+				.foregroundStyle(Theme.muted)
+			Button("Try again") { store.retry() }
+				.font(Theme.ui(14, .semibold))
+				.foregroundStyle(Theme.accent)
+				.buttonStyle(.plain)
+		}
+		.padding(.horizontal, 18)
+		.padding(.vertical, 12)
+		.background(Theme.surface, in: Capsule())
+		.overlay(Capsule().strokeBorder(Theme.hairline, lineWidth: 1))
+		.padding(.bottom, 28)
 	}
 
 	private var topBar: some View {

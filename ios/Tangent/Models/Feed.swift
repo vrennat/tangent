@@ -22,6 +22,9 @@ struct FeedCard: Identifiable, Hashable {
 	let article: Article
 	let fromTitle: String
 	let relation: Relation
+	/// True while an optimistic dive placeholder is still loading its real article.
+	/// The card renders title + breadcrumb + a skeleton body until the swap.
+	var pending: Bool = false
 }
 
 // MARK: - /api/next wire types

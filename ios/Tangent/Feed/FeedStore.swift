@@ -15,9 +15,16 @@ final class FeedStore {
 	private(set) var cards: [FeedCard] = []
 	private(set) var status: Status = .idle
 	private(set) var seedTitle: String?
+	/// Highest index the user has actually paged to. Cards beyond it are prefetch —
+	/// safe to drop when a dive or retune changes the chain tip.
+	private(set) var lastRevealedIndex = 0
 
 	private var counter = 0
 	private var building = false
+	/// Bumped whenever the chain is redirected (start, dive, retune). In-flight builds
+	/// capture the version before awaiting and discard their result if it moved — an
+	/// append built from a stale tip must not land after the chain has turned.
+	private var chainVersion = 0
 
 	private let api = APIClient.shared
 	private let profile: EngagementProfile
@@ -32,8 +39,10 @@ final class FeedStore {
 
 	/// Begin a new rabbit hole from a seed article.
 	func start(_ seed: String) async {
+		chainVersion += 1
 		cards = []
 		seedTitle = seed
+		lastRevealedIndex = 0
 		status = .loading
 
 		do {
@@ -52,6 +61,7 @@ final class FeedStore {
 
 	/// A card scrolled into view: record engagement, then keep the chain stocked ahead.
 	func didReveal(_ card: FeedCard, at index: Int) {
+		lastRevealedIndex = max(lastRevealedIndex, index)
 		profile.recordSeen(card.article)
 		Task { await ensureAhead(from: index) }
 	}
@@ -60,14 +70,75 @@ final class FeedStore {
 	/// (relation `.dive`) and steer the hole through it — mirrors the web reader, where
 	/// following a link drops a card into the feed rather than deepening a reader stack.
 	/// `from` is the article being read, for the new card's "Dove in from …" breadcrumb.
-	/// A dive is an intentional read, so it feeds both signals (clickthrough + seen).
-	/// Returns the new card's id to scroll to, or nil if the article couldn't be fetched.
-	func dive(into title: String, from: String) async -> String? {
+	///
+	/// Optimistic: the destination title is already known, so the placeholder card is
+	/// appended SYNCHRONOUSLY and its id returned at once — the caller can page to it
+	/// immediately while the real body (and the clickthrough + seen signals, which need
+	/// the server tokens) is patched in by `resolvePending` in the background.
+	/// Unrevealed prefetched tail cards were built from the pre-dive tip, so they're
+	/// dropped first (the web clears its prefetch buffer at the same point).
+	func dive(into title: String, from: String) -> String {
+		chainVersion += 1
+		if lastRevealedIndex + 1 < cards.count {
+			cards.removeSubrange((lastRevealedIndex + 1)...)
+		}
+		let placeholder = makeCard(.pendingStub(title: title), from: from, relation: .dive, pending: true)
+		cards.append(placeholder)
+		status = .ready
+		Task { await resolvePending(id: placeholder.id, title: title) }
+		return placeholder.id
+	}
+
+	/// Fill an optimistic placeholder with its fetched article, or drop it on failure
+	/// (silent rollback — a single failed dive shouldn't flip the feed into the error
+	/// banner; the user can tap the link again).
+	private func resolvePending(id: String, title: String) async {
 		do {
-			guard let article = try await api.card(title: title) else { return nil }
-			let card = makeCard(article, from: from, relation: .dive)
-			cards.append(card)
+			guard let article = try await api.card(title: title) else {
+				cards.removeAll { $0.id == id }
+				return
+			}
+			guard let index = cards.firstIndex(where: { $0.id == id }) else { return }
+			cards[index] = FeedCard(
+				id: id, article: article, fromTitle: cards[index].fromTitle, relation: .dive
+			)
 			profile.recordClickthrough(article)
+			profile.recordSeen(article)
+			status = .ready
+			await ensureAhead(from: cards.count - 1)
+		} catch {
+			cards.removeAll { $0.id == id }
+		}
+	}
+
+	/// Reset a mid-scroll error and try stocking the chain again.
+	func retry() {
+		guard status == .error else { return }
+		status = .ready
+		Task { await ensureAhead(from: lastRevealedIndex) }
+	}
+
+	/// One more hop before giving up: ask the engine for a *related* page from the chain
+	/// tip (deliberate steering, so no surprise). Returns the new card's id, or nil when
+	/// even the related pool is dry — the caller falls back to start-over.
+	func jumpRelated() async -> String? {
+		guard let tip = effectiveTip() else { return nil }
+		let req = NextRequest(
+			fromTitle: tip.article.title,
+			mode: "related",
+			interest: profile.interestPayload,
+			session: SessionPayload(
+				seenTitles: cards.map { $0.article.title },
+				recentTokens: recentTokens(),
+				noSurprise: true,
+				stepIndex: cards.count
+			)
+		)
+		do {
+			let res = try await api.next(req)
+			guard let article = res.article else { return nil }
+			let card = makeCard(article, from: tip.article.title, relation: .related)
+			cards.append(card)
 			profile.recordSeen(article)
 			status = .ready
 			await ensureAhead(from: cards.count - 1)
@@ -93,6 +164,7 @@ final class FeedStore {
 	/// Fetch one more card from the effective chain tip and append it to `cards`.
 	private func buildAppend() async -> Bool {
 		guard let tip = effectiveTip() else { return false }
+		let version = chainVersion
 
 		let req = NextRequest(
 			fromTitle: tip.article.title,
@@ -108,6 +180,9 @@ final class FeedStore {
 
 		do {
 			let res = try await api.next(req)
+			// The chain turned (dive/retune/restart) while this build was in flight —
+			// its card was picked from a stale tip, so drop it.
+			guard version == chainVersion else { return false }
 			if res.exhausted == true { status = .exhausted; return false }
 			guard let article = res.article else { return false }
 
@@ -117,6 +192,7 @@ final class FeedStore {
 			cards.append(makeCard(article, from: from, relation: res.relation))
 			return true
 		} catch {
+			guard version == chainVersion else { return false }
 			status = .error
 			return false
 		}
@@ -138,8 +214,13 @@ final class FeedStore {
 		return Array(tokens)
 	}
 
-	private func makeCard(_ article: Article, from: String, relation: Relation) -> FeedCard {
+	private func makeCard(
+		_ article: Article, from: String, relation: Relation, pending: Bool = false
+	) -> FeedCard {
 		defer { counter += 1 }
-		return FeedCard(id: "\(article.title)#\(counter)", article: article, fromTitle: from, relation: relation)
+		return FeedCard(
+			id: "\(article.title)#\(counter)", article: article,
+			fromTitle: from, relation: relation, pending: pending
+		)
 	}
 }

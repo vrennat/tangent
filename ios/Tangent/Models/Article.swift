@@ -27,6 +27,20 @@ struct Article: Codable, Hashable, Identifiable {
 	var readURL: URL? { URL(string: wikiUrl) }
 }
 
+extension Article {
+	/// Placeholder body for an optimistic dive: the title is known (the link the reader
+	/// tapped), so the card can render immediately; the real body — and the engagement
+	/// signals, which need the server tokens — arrives when /api/card resolves.
+	static func pendingStub(title: String) -> Article {
+		let path = title.replacingOccurrences(of: " ", with: "_")
+			.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? title
+		return Article(
+			title: title, description: nil, extract: "", thumbnail: nil,
+			wikiUrl: "https://en.wikipedia.org/wiki/\(path)", lang: "en", tokens: []
+		)
+	}
+}
+
 /// A typeahead search hit for the seed picker (`/api/search`).
 struct SearchResult: Codable, Hashable, Identifiable {
 	let title: String

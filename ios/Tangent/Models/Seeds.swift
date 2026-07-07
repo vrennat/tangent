@@ -39,4 +39,10 @@ enum Seeds {
 		let day = Calendar.current.ordinality(of: .day, in: .era, for: Date()) ?? 0
 		return all[day % all.count]
 	}
+
+	/// A fresh start that never repeats the hole the user just exhausted.
+	static func random(excluding title: String? = nil) -> Seed {
+		let pool = all.filter { $0.title != title }
+		return pool.randomElement() ?? all[0]
+	}
 }

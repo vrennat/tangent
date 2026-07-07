@@ -8,6 +8,11 @@ struct ArticleCardView: View {
 	var onRead: (Article) -> Void
 
 	@State private var appearedAt: Date?
+	/// Total on-screen time across appearances, for skip detection (mirrors the web's
+	/// visibleTotalMs): a card seen long enough to register but left quickly with no
+	/// interaction reads as a weak "not this" signal.
+	@State private var visibleTotalMs: Double = 0
+	@State private var interacted = false
 
 	private var article: Article { card.article }
 	private var isLiked: Bool { profile.isLiked(article.title) }
@@ -53,16 +58,22 @@ struct ArticleCardView: View {
 				.padding(.top, 18)
 			}
 
-			Text(article.extract)
-				.font(Theme.serif(18))
-				.foregroundStyle(Theme.ink.opacity(0.92))
-				.lineSpacing(5)
-				.lineLimit(article.thumbnail == nil ? 12 : 6)
-				.padding(.top, 18)
+			if card.pending {
+				skeletonBody
+			} else {
+				Text(article.extract)
+					.font(Theme.serif(18))
+					.foregroundStyle(Theme.ink.opacity(0.92))
+					.lineSpacing(5)
+					.lineLimit(article.thumbnail == nil ? 12 : 6)
+					.padding(.top, 18)
+			}
 
 			Spacer(minLength: 0)
 
-			actions
+			if !card.pending {
+				actions
+			}
 		}
 		.padding(.horizontal, 28)
 		.padding(.vertical, 64)
@@ -74,15 +85,39 @@ struct ArticleCardView: View {
 			Task { _ = try? await ArticleHTMLCache.shared.html(for: article.title) }
 		}
 		.onDisappear {
-			if let start = appearedAt {
-				profile.recordDwell(article, ms: Date().timeIntervalSince(start) * 1000)
+			guard let start = appearedAt else { return }
+			appearedAt = nil
+			let ms = Date().timeIntervalSince(start) * 1000
+			visibleTotalMs += ms
+			profile.recordDwell(article, ms: ms)
+			if visibleTotalMs >= Tune.skipMinVisibleMs,
+			   visibleTotalMs < Tune.skipThresholdMs,
+			   !interacted {
+				profile.recordSkip(article)
 			}
 		}
+	}
+
+	/// Calm static placeholder lines while a dived card's body loads. Kept shorter than
+	/// any real extract so the swap only ever grows the card downward.
+	private var skeletonBody: some View {
+		VStack(alignment: .leading, spacing: 10) {
+			ForEach(0..<5, id: \.self) { line in
+				RoundedRectangle(cornerRadius: 4)
+					.fill(Theme.surface)
+					.frame(height: 14)
+					.frame(maxWidth: .infinity)
+					.padding(.trailing, line == 4 ? 120 : CGFloat((line * 23) % 56))
+			}
+		}
+		.padding(.top, 18)
+		.accessibilityLabel("Loading article")
 	}
 
 	private var actions: some View {
 		HStack(spacing: 20) {
 			Button {
+				interacted = true
 				profile.toggleLike(article)
 			} label: {
 				Image(systemName: isLiked ? "star.fill" : "star")
@@ -94,6 +129,7 @@ struct ArticleCardView: View {
 			Spacer()
 
 			Button {
+				interacted = true
 				profile.recordClickthrough(article)
 				onRead(article)
 			} label: {
