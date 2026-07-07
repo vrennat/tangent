@@ -15,6 +15,7 @@ struct APIClient {
 	}
 
 	enum APIError: Error {
+		case badURL
 		case badStatus(Int)
 		case transport(Error)
 	}
@@ -23,11 +24,20 @@ struct APIClient {
 	private struct SearchResponse: Decodable { let results: [SearchResult] }
 	private struct ArticleResponse: Decodable { let html: String? }
 
+	/// Build a GET URL for an API path with query items, without force-unwrapping —
+	/// networking is the one place an odd title must degrade to a thrown error, not a crash.
+	private func url(_ path: String, _ items: [URLQueryItem]) throws -> URL {
+		guard var comps = URLComponents(url: base.appendingPathComponent(path), resolvingAgainstBaseURL: false) else {
+			throw APIError.badURL
+		}
+		comps.queryItems = items
+		guard let url = comps.url else { throw APIError.badURL }
+		return url
+	}
+
 	/// GET /api/card?title=… — a fully-resolved card (or nil if the page doesn't exist).
 	func card(title: String) async throws -> Article? {
-		var comps = URLComponents(url: base.appendingPathComponent("api/card"), resolvingAgainstBaseURL: false)!
-		comps.queryItems = [URLQueryItem(name: "title", value: title)]
-		let res: CardResponse = try await get(comps.url!)
+		let res: CardResponse = try await get(url("api/card", [URLQueryItem(name: "title", value: title)]))
 		return res.article
 	}
 
@@ -42,17 +52,13 @@ struct APIClient {
 
 	/// GET /api/article?title=… — sanitized full-article HTML body for inline reading.
 	func article(title: String) async throws -> String? {
-		var comps = URLComponents(url: base.appendingPathComponent("api/article"), resolvingAgainstBaseURL: false)!
-		comps.queryItems = [URLQueryItem(name: "title", value: title)]
-		let res: ArticleResponse = try await get(comps.url!)
+		let res: ArticleResponse = try await get(url("api/article", [URLQueryItem(name: "title", value: title)]))
 		return res.html
 	}
 
 	/// GET /api/search?q=… — typeahead for the seed picker.
 	func search(_ query: String) async throws -> [SearchResult] {
-		var comps = URLComponents(url: base.appendingPathComponent("api/search"), resolvingAgainstBaseURL: false)!
-		comps.queryItems = [URLQueryItem(name: "q", value: query)]
-		let res: SearchResponse = try await get(comps.url!)
+		let res: SearchResponse = try await get(url("api/search", [URLQueryItem(name: "q", value: query)]))
 		return res.results
 	}
 

@@ -101,7 +101,8 @@ final class FeedStore {
 			session: SessionPayload(
 				seenTitles: cards.map { $0.article.title },
 				recentTokens: recentTokens(),
-				noSurprise: false
+				noSurprise: false,
+				stepIndex: cards.count
 			)
 		)
 

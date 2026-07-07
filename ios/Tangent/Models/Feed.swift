@@ -27,16 +27,27 @@ struct FeedCard: Identifiable, Hashable {
 // MARK: - /api/next wire types
 
 /// The persistent, syncable half of the profile (the interest vector).
+/// Mirrors `InterestPayload` in src/lib/feed/types.ts field-for-field.
 struct InterestPayload: Codable {
 	let tokenWeights: [String: Double]
-	let tokenDocFreq: [String: Int]
+	/// Avoidance vector learned from quick skips — without it the server can never
+	/// score "the user keeps skipping this topic".
+	let tokenAvoidWeights: [String: Double]
+	/// Fractional after session decay (df ages like the weights it discounts).
+	let tokenDocFreq: [String: Double]
+	/// Explicit tangent flavor ("balanced" | "technology" | ...). Server-normalized.
+	let taste: String
 }
 
 /// The ephemeral per-session half the client always tracks and sends.
+/// Mirrors `SessionPayload` in src/lib/feed/types.ts field-for-field.
 struct SessionPayload: Codable {
 	let seenTitles: [String]
 	let recentTokens: [String]
 	let noSurprise: Bool?
+	/// Chain position (seed included), driving the server's cold-open pacing and
+	/// surprise-epsilon schedule. Same semantics as the web's cards+buffer count.
+	let stepIndex: Int
 }
 
 /// POST body for `/api/next`.
