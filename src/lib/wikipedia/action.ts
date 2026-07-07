@@ -47,10 +47,17 @@ function toCandidate(p: ActionPage, relation: 'link' | 'related', position: numb
 	};
 }
 
-/** Keep substantive pages (description or image), thumbnailed first, capped. */
-function refine(pages: ActionPage[], relation: 'link' | 'related'): Candidate[] {
+/** Keep substantive pages (description or image), thumbnailed first, capped.
+ *
+ * Generator results arrive in ARBITRARY order; `index` carries the generator's
+ * rank (for morelike: search, similarity; for links, alphabetical). Rank first so
+ * each candidate's `position` — which the engine's position boost reads as
+ * prominence — reflects that rank, not the response's hash order.
+ * Exported for tests. */
+export function refine(pages: ActionPage[], relation: 'link' | 'related'): Candidate[] {
 	return pages
 		.filter((p) => !p.missing && p.ns === 0 && (p.description || p.thumbnail))
+		.sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
 		.map((p, i) => toCandidate(p, relation, i))
 		.sort((a, b) => Number(Boolean(b.thumbnail)) - Number(Boolean(a.thumbnail)))
 		.slice(0, MAX_CANDIDATES);
