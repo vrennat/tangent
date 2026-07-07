@@ -8,7 +8,11 @@
 const REST_BASE = 'https://en.wikipedia.org/api/rest_v1';
 const ACTION_BASE = 'https://en.wikipedia.org/w/api.php';
 
-const USER_AGENT = 'Tangent/0.1 (https://tangent.page; tannervass@gmail.com)';
+// Overridable so offline tooling (scripts/feed-sim) identifies itself distinctly —
+// a heavy sim run must never look like production traffic to Wikimedia rate limiting.
+// The guard keeps Workers happy (`process` doesn't exist there; the default applies).
+const USER_AGENT =
+	globalThis.process?.env?.TANGENT_UA ?? 'Tangent/0.1 (https://tangent.page; tannervass@gmail.com)';
 
 const HEADERS = {
 	'User-Agent': USER_AGENT,
