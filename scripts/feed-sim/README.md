@@ -67,10 +67,12 @@ against the full grid (660 journeys, 18,379 transitions) as the diagnosis gate f
 - **Candidate categories are truncated at fetch.** Only 63% of served cards carry
   a non-hidden category; cache-wide, empty-category rate climbs from 18% at
   candidate index 0 to 67% at index 49 (0 of 10,336 parents all-empty — a
-  per-request `cllimit` budget exhausting mid-batch, not a schema artifact). The
-  metadata batch must follow `clcontinue` before a category-affinity score means
-  anything; the position-correlated missingness would otherwise bias any
-  category signal toward early-position candidates, compounding the position boost.
+  per-request membership budget exhausting mid-batch, not a schema artifact).
+  Root cause, verified live: with `clshow=!hidden`, an exhausted category scan
+  reports `batchcomplete` and offers NO continuation — silent truncation. Fixed
+  in `action.ts` (2026-07-16) with a dedicated chunked category pass using
+  `clprop=hidden` + client-side filtering; `enrich-categories.ts` backfills the
+  sim cache to match.
 
 ## What it found (2026-06-13)
 

@@ -51,11 +51,13 @@ grid: 660 journeys, 18,379 consecutive transitions; details in the feed-sim READ
   jumps in the feed.
 - **Prerequisite: category fetch truncation.** Only 63% of served cards carry a
   non-hidden category, with empty-rate climbing from 18% (candidate index 0) to 67%
-  (index 49) — the batched metadata query's `cllimit` budget exhausts mid-batch and
-  `clcontinue` is not followed. `categoryAffinityWeight` is meaningless until this
-  is fixed, and the position-correlated missingness would bias the signal toward
-  early-position candidates, compounding the position boost. Fix lands first (see
-  Design).
+  (index 49) — the batched metadata query's ~500-membership budget exhausts
+  mid-batch. Root cause (verified live): with `clshow=!hidden` set, an exhausted
+  scan reports `batchcomplete` with NO continuation offered — silent, unresumable
+  truncation, worst on generator queries that spread the budget over hundreds of
+  discarded pages. `categoryAffinityWeight` is meaningless until this is fixed, and
+  the position-correlated missingness would bias the signal toward early-position
+  candidates, compounding the position boost. Fix lands first (see Design).
 
 ## Goals
 
@@ -82,15 +84,15 @@ grid: 660 journeys, 18,379 consecutive transitions; details in the feed-sim READ
 
 ## Design
 
-### Step 0: complete category coverage (prerequisite)
+### Step 0: complete category coverage (prerequisite) — done 2026-07-16
 
-The candidate metadata batch (`action.ts:67-74`) must follow `clcontinue` until
-category lists are complete for every title in the batch (or chunk the batch so
-the 500-membership budget cannot exhaust). Cached sim data shows 36.5% of
-candidates currently carry empty categories, position-correlated. After the fix,
-re-run the sim coverage stat (`jumpdist.ts` reports it) and expect >95% of
-mainspace candidates to carry at least one non-hidden category. Everything below
-assumes this.
+Categories move out of the shared metadata batch into a dedicated second pass over
+only the kept candidates (`fetchCategoriesFor`/`withCategories` in `action.ts`):
+parallel chunks of 10 titles, `clprop=hidden` with a client-side hidden filter
+(because `clshow=!hidden` silently suppresses continuation), per-chunk `clcontinue`
+backstop. Live-verified 100% coverage on Roman Empire / Octopus / Jazz pools.
+After the sim cache is re-enriched, `jumpdist.ts` coverage should read >95%.
+Everything below assumes this.
 
 ### Run state machine
 

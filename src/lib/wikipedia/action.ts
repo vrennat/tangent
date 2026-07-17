@@ -12,7 +12,7 @@ interface ActionPage {
 	description?: string;
 	thumbnail?: Thumbnail;
 	pageprops?: { disambiguation?: string };
-	categories?: { ns: number; title: string }[];
+	categories?: { ns: number; title: string; hidden?: boolean }[];
 }
 
 interface QueryResponse {
@@ -22,6 +22,7 @@ interface QueryResponse {
 		normalized?: { from: string; to: string }[];
 		redirects?: { from: string; to: string }[];
 	};
+	continue?: Record<string, string>;
 }
 
 interface ParseResponse {
@@ -63,15 +64,81 @@ export function refine(pages: ActionPage[], relation: 'link' | 'related'): Candi
 		.slice(0, MAX_CANDIDATES);
 }
 
-/** Batch-fetch metadata for a list of titles (used to enrich + score candidates). */
+/** Batch-fetch metadata for a list of titles (used to enrich + score candidates).
+ *  Categories are deliberately NOT here: prop=categories pays a fixed membership
+ *  budget per request, so on generator queries (up to 500 pages) it spreads a few
+ *  categories across pages we mostly discard. Complete categories are fetched in a
+ *  second pass over only the kept candidates — see withCategories(). */
 const METADATA_PROPS = {
-	prop: 'pageimages|description|pageprops|categories',
+	prop: 'pageimages|description|pageprops',
 	piprop: 'thumbnail',
 	pithumbsize: '480',
-	ppprop: 'disambiguation',
-	clshow: '!hidden',
-	cllimit: 'max'
+	ppprop: 'disambiguation'
 } as const;
+
+/** Titles per category request. Raw memberships (hidden included) run ~45-50 per
+ *  article, so 10 titles sits just under the 500-membership request budget and the
+ *  clcontinue backstop rarely fires. */
+const CATEGORY_CHUNK = 10;
+
+/**
+ * Complete non-hidden categories for a capped title list.
+ *
+ * Two Action API traps shape this function, both verified empirically (2026-07-16):
+ *  - prop=categories pays a fixed ~500-membership budget per REQUEST, not per page,
+ *    so a large batch exhausts it mid-list and later pages come back empty (the sim
+ *    measured 36.5% of cached candidates category-less, climbing with index).
+ *  - With clshow=!hidden set, an exhausted scan reports batchcomplete with NO
+ *    continuation at all — silent, unresumable truncation. So hidden categories
+ *    must be filtered client-side via clprop=hidden, which keeps continuation honest.
+ */
+export async function fetchCategoriesFor(titles: string[]): Promise<Map<string, string[]>> {
+	const out = new Map<string, string[]>();
+	const capped = titles.slice(0, MAX_CANDIDATES);
+	if (capped.length === 0) return out;
+
+	const chunks: string[][] = [];
+	for (let i = 0; i < capped.length; i += CATEGORY_CHUNK)
+		chunks.push(capped.slice(i, i + CATEGORY_CHUNK));
+
+	await Promise.all(
+		chunks.map(async (chunk) => {
+			const base = {
+				action: 'query',
+				titles: chunk.join('|'),
+				prop: 'categories',
+				clprop: 'hidden',
+				cllimit: 'max'
+			};
+			let cont: Record<string, string> = {};
+			// One chunk usually completes in a single request; the bound only stops a
+			// pathological continuation loop.
+			for (let i = 0; i < 4; i++) {
+				const data = await actionGet<QueryResponse>({ ...base, ...cont });
+				for (const p of data.query?.pages ?? []) {
+					const visible = (p.categories ?? []).filter((c) => !c.hidden).map((c) => c.title);
+					if (visible.length === 0) continue;
+					out.set(p.title, [...(out.get(p.title) ?? []), ...visible]);
+				}
+				if (!data.continue?.clcontinue) break;
+				cont = data.continue;
+			}
+		})
+	);
+	return out;
+}
+
+/** Fill complete categories onto candidates. Tolerates fetch failure — a candidate
+ *  without categories is degraded scoring, not a missing card. */
+async function withCategories(candidates: Candidate[]): Promise<Candidate[]> {
+	if (candidates.length === 0) return candidates;
+	try {
+		const cats = await fetchCategoriesFor(candidates.map((c) => c.title));
+		return candidates.map((c) => ({ ...c, categories: cats.get(c.title) ?? [] }));
+	} catch {
+		return candidates;
+	}
+}
 
 /**
  * Lead-section links of an article, in reading order. This is the heart of the
@@ -168,7 +235,7 @@ export async function enrichByTitles(orderedTitles: string[]): Promise<Candidate
 		emitted.add(page.title);
 		candidates.push(toCandidate(page, 'link', position));
 	});
-	return candidates;
+	return withCategories(candidates);
 }
 
 /** Real outbound links from an article (alphabetical) — kept as a fallback source. */
@@ -182,7 +249,7 @@ export async function fetchOutboundLinks(title: string): Promise<Candidate[]> {
 		redirects: '1',
 		...METADATA_PROPS
 	});
-	return refine(data.query?.pages ?? [], 'link');
+	return withCategories(refine(data.query?.pages ?? [], 'link'));
 }
 
 /** "More like this" via CirrusSearch — our stand-in for the dead REST related endpoint. */
@@ -195,7 +262,7 @@ export async function fetchRelated(title: string): Promise<Candidate[]> {
 		gsrlimit: '20',
 		...METADATA_PROPS
 	});
-	return refine(data.query?.pages ?? [], 'related');
+	return withCategories(refine(data.query?.pages ?? [], 'related'));
 }
 
 /** Hybrid fallback: outbound links topped up with related pages when sparse. */
