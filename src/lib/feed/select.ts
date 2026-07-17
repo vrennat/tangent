@@ -79,6 +79,25 @@ function tangentRanked(breakScored: Ranked[]): Ranked[] {
 }
 
 /**
+ * The running foot: the highest-intrigue eligible candidate the pick left behind.
+ * A UJBR page-bottom fact — offered to clients as a one-line marginalia between
+ * cards, tappable as a low-stakes tangent invitation. Deterministic (no rng), so
+ * web and server offer the same foot for the same pool. Clients own cadence and
+ * dedupe; the engine just surfaces the best runner-up, or nothing.
+ */
+function footCandidate(scored: Scored[], pickedTitle: string): Candidate | undefined {
+	let best: { candidate: Candidate; hook: number } | undefined;
+	for (const s of scored) {
+		if (s.candidate.title === pickedTitle) continue;
+		const hook = intrigue(s.candidate);
+		if (hook < FEED.surpriseIntrigueFloor) continue;
+		if (isPolitical(candidateText(s.candidate))) continue;
+		if (!best || hook > best.hook) best = { candidate: s.candidate, hook };
+	}
+	return best?.candidate;
+}
+
+/**
  * Choose the next article from a candidate pool.
  *
  * The feed moves in runs: while the run is young (runDepth < runMinLength, or the
@@ -106,6 +125,13 @@ export function selectNext(candidates: Candidate[], ctx: EngineContext): Selecti
 	const roll = ctx.rng();
 	const breaking = !ctx.noSurprise && roll < breakProbability(ctx);
 
+	const withFoot = (candidate: Candidate, surprised: boolean, runReset: boolean): Selection => ({
+		candidate,
+		surprised,
+		runReset,
+		foot: footCandidate(scored, candidate.title)
+	});
+
 	if (breaking) {
 		const breakScored: Ranked[] = scored
 			.map((s) => ({ ...s, selectionScore: s.score + runVariety(s.candidate, ctx) }))
@@ -113,20 +139,12 @@ export function selectNext(candidates: Candidate[], ctx: EngineContext): Selecti
 
 		const tangentPool = tangentRanked(breakScored);
 		if (tangentPool.length >= FEED.surpriseMinPool) {
-			return {
-				candidate: pickWeighted(tangentPool, ctx.rng, FEED.surpriseTemperature),
-				surprised: true,
-				runReset: true
-			};
+			return withFoot(pickWeighted(tangentPool, ctx.rng, FEED.surpriseTemperature), true, true);
 		}
 
 		// Drift fall-through: no jump worth taking, but still leave the neighborhood
 		// (variety stays applied) and start a new run.
-		return {
-			candidate: pickWeighted(breakScored.slice(0, FEED.topK), ctx.rng),
-			surprised: false,
-			runReset: true
-		};
+		return withFoot(pickWeighted(breakScored.slice(0, FEED.topK), ctx.rng), false, true);
 	}
 
 	// In-run pick: coherence pulls toward the run's neighborhood.
@@ -140,9 +158,5 @@ export function selectNext(candidates: Candidate[], ctx: EngineContext): Selecti
 		}))
 		.sort((a, b) => b.selectionScore - a.selectionScore);
 
-	return {
-		candidate: pickWeighted(ranked.slice(0, FEED.topK), ctx.rng),
-		surprised: false,
-		runReset: false
-	};
+	return withFoot(pickWeighted(ranked.slice(0, FEED.topK), ctx.rng), false, false);
 }

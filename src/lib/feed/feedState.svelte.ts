@@ -2,6 +2,7 @@ import { browser } from '$app/environment';
 import type { Article, Candidate } from '$lib/wikipedia/types';
 import type { Connection, EngineContext, FeedCard, FetchResult, Relation, TrailNode } from './types';
 import { selectNext } from './select';
+import { department } from './departments';
 import { categoryTokenSet, tokenize } from './tokens';
 import { profile } from '$lib/engagement/profile.svelte';
 import { saveTrail, loadTrail, clearTrail, chainTip } from './trail';
@@ -63,6 +64,10 @@ class FeedState {
 
 	#buffer: FeedCard[] = [];
 	#counter = 0;
+	/** Cards built since a running foot was last attached (cadence gate). */
+	#cardsSinceFoot = 0;
+	/** Foot titles already offered — a shown foot must not rerun as a later foot. */
+	#shownFeet = new Set<string>();
 	/** Guards branchFrom so rapid "More like this" taps don't stack branches / race the buffer. */
 	#branching = false;
 	/** Serializes builds so each one sees a consistent chain tip. */
@@ -390,13 +395,14 @@ class FeedState {
 				const fromTitle = selection.surprised
 					? (rawTip?.article.title ?? tip.article.title)
 					: tip.article.title;
-				this.#buffer.push(
-					this.#card(
-						cardResult.data,
-						{ fromTitle, relation, runStart: selection.runReset },
-						selection.candidate.categories
-					)
+				const built = this.#card(
+					cardResult.data,
+					{ fromTitle, relation, runStart: selection.runReset },
+					selection.candidate.categories
 				);
+				if (selection.surprised) built.department = department(selection.candidate) ?? undefined;
+				this.#attachFoot(built, selection.foot);
+				this.#buffer.push(built);
 				return true;
 			}
 			if (cardResult.kind === 'network') {
@@ -496,6 +502,21 @@ class FeedState {
 			stepIndex: all.length,
 			rng: Math.random
 		};
+	}
+
+	/**
+	 * Attach a running foot to a freshly built card when the cadence allows: at
+	 * most one per footEvery cards, never a title already offered or already in
+	 * the feed. Silence over filler — most cards get none.
+	 */
+	#attachFoot(card: FeedCard, foot: Candidate | undefined): void {
+		this.#cardsSinceFoot++;
+		if (!foot || this.#cardsSinceFoot < FEED.footEvery) return;
+		if (this.#shownFeet.has(foot.title)) return;
+		if ([...this.cards, ...this.#buffer].some((c) => c.article.title === foot.title)) return;
+		card.foot = { title: foot.title, description: foot.description };
+		this.#shownFeet.add(foot.title);
+		this.#cardsSinceFoot = 0;
 	}
 
 	#card(article: Article, connection: Connection, categories?: string[]): FeedCard {

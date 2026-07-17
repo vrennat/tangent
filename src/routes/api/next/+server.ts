@@ -4,6 +4,7 @@ import type { NextRequest, NextResponse, Relation } from '$lib/feed/types';
 import { fetchExploreCandidates, fetchRelated } from '$lib/wikipedia/action';
 import { selectNext } from '$lib/feed/select';
 import { buildEngineContext } from '$lib/feed/context';
+import { department } from '$lib/feed/departments';
 import { categoryTokenSet } from '$lib/feed/tokens';
 import { resolveCard } from '$lib/server/resolveCard';
 import { cached, TTL } from '$lib/server/cache';
@@ -77,7 +78,11 @@ export const POST: RequestHandler = async ({ request, setHeaders }) => {
 				surprised: selection.surprised,
 				relation,
 				runReset: selection.runReset,
-				categoryTokens: [...categoryTokenSet(selection.candidate.categories)]
+				categoryTokens: [...categoryTokenSet(selection.candidate.categories)],
+				department: (selection.surprised && department(selection.candidate)) || undefined,
+				foot: selection.foot
+					? { title: selection.foot.title, description: selection.foot.description }
+					: undefined
 			} satisfies NextResponse);
 		}
 		blocked.add(selection.candidate.title);

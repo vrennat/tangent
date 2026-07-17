@@ -472,6 +472,57 @@ describe('selectNext', () => {
 	});
 });
 
+describe('running foot', () => {
+	it('offers the highest-intrigue eligible runner-up alongside the pick', () => {
+		const pool = [
+			candidate({ title: 'Canal', description: 'water channel', position: 0 }),
+			candidate({ title: 'Mild curio', description: 'oldest bridge', position: 20 }),
+			candidate({
+				title: 'Lost expedition',
+				description: 'unsolved mystery of an abandoned expedition',
+				position: 30
+			})
+		];
+		const result = selectNext(pool, context({ rng: seq([0.99, 0]) }));
+		expect(result?.candidate.title).toBe('Canal');
+		expect(result?.foot?.title).toBe('Lost expedition');
+	});
+
+	it('never offers the picked card as its own foot', () => {
+		const pool = [
+			candidate({
+				title: 'Lost expedition',
+				description: 'unsolved mystery of an abandoned expedition',
+				position: 0
+			})
+		];
+		const result = selectNext(pool, context({ rng: seq([0.99, 0]) }));
+		expect(result?.candidate.title).toBe('Lost expedition');
+		expect(result?.foot).toBeUndefined();
+	});
+
+	it('offers no foot when nothing clears the intrigue floor', () => {
+		const pool = [
+			candidate({ title: 'Canal', description: 'water channel', position: 0 }),
+			candidate({ title: 'Trade route', description: 'transport network', position: 5 })
+		];
+		expect(selectNext(pool, context({ rng: seq([0.99, 0]) }))?.foot).toBeUndefined();
+	});
+
+	it('excludes political candidates from feet', () => {
+		const pool = [
+			candidate({ title: 'Canal', description: 'water channel', position: 0 }),
+			candidate({
+				title: 'Watergate scandal',
+				description: 'unsolved political mystery of a failed burglary',
+				categories: ['Category:Political scandals'],
+				position: 30
+			})
+		];
+		expect(selectNext(pool, context({ rng: seq([0.99, 0]) }))?.foot).toBeUndefined();
+	});
+});
+
 describe('runVariety', () => {
 	it('penalizes per unique shared token with the run', () => {
 		const ctx = context({ runTokens: new Set(['water', 'channel']) });

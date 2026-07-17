@@ -9,6 +9,8 @@
 	import type { FeedCard } from '$lib/feed/types';
 	import { randomSeed } from '$lib/seeds';
 	import ArticleCard from '$lib/components/ArticleCard.svelte';
+	import TangentDivider from '$lib/components/TangentDivider.svelte';
+	import FootLine from '$lib/components/FootLine.svelte';
 	import ArticleReader from '$lib/components/ArticleReader.svelte';
 	import TrailPanel from '$lib/components/TrailPanel.svelte';
 	import SkeletonCard from '$lib/components/SkeletonCard.svelte';
@@ -170,6 +172,14 @@
 	// feed itself stays the record of the rabbit hole rather than a hidden reader stack.
 	// `fromTitle` is the article you were reading, for the new card's "Dove in from …"
 	// breadcrumb. beginDive feeds the engagement profile (clickthrough + seen) on its own.
+	// Pulling a running foot dives into it from the card it appeared under — same
+	// flow as an in-article dive: the foot's article lands as a fresh card and the
+	// trail records that the thread was pulled.
+	async function handleFootPull(card: FeedCard, title: string) {
+		const id = feed.beginDive(title, card.article.title);
+		await goToCard(id, { instant: true });
+	}
+
 	async function handleDive(title: string) {
 		const fromTitle = reader.current ?? '';
 		// Don't close the reader here. goToCard captures reader.isOpen to decide whether to
@@ -263,6 +273,9 @@
 		<ActionHint />
 		{#each feed.cards as card (card.id)}
 			{@const sourceId = sourceIdByCard.get(card.id)}
+			{#if card.connection.relation === 'surprise'}
+				<TangentDivider department={card.department} />
+			{/if}
 			<div data-card={card.id} class="scroll-mt-20" class:wh-land={card.id === landedId}>
 				<ArticleCard
 					{card}
@@ -272,6 +285,14 @@
 					onSeen={() => feed.markSeen(card.id)}
 				/>
 			</div>
+			{#if card.foot}
+				{@const foot = card.foot}
+				<FootLine
+					title={foot.title}
+					description={foot.description}
+					onPull={() => handleFootPull(card, foot.title)}
+				/>
+			{/if}
 		{/each}
 	</div>
 

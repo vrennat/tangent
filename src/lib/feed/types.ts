@@ -21,6 +21,12 @@ export interface FeedCard {
 	 *  feeds the run's category accumulation. Absent for seeds/dives/rehydrated
 	 *  cards (fetched as bare articles), which simply contribute no category signal. */
 	categories?: string[];
+	/** Recurring-column label for a tangent card ("Deep Time", "Strange Deaths" …);
+	 *  absent on non-tangents and on tangents that match no department. */
+	department?: string;
+	/** A running foot to render after this card: a one-line fact from the pick's
+	 *  runner-up, tappable as a dive. Attached by cadence — most cards have none. */
+	foot?: { title: string; description: string | null };
 	/**
 	 * True while an optimistic placeholder is still loading its real article. A dive
 	 * appends the card and scrolls to it immediately (we already know the title), then
@@ -102,6 +108,9 @@ export interface Selection {
 	 *  fall-through when the tangent pool was too shallow). Clients reset their
 	 *  run accounting (depth, run tokens/categories) on it. */
 	runReset: boolean;
+	/** Highest-intrigue eligible runner-up — the "running foot" offered as a
+	 *  one-line fact between cards. Clients own cadence and dedupe. */
+	foot?: Candidate;
 }
 
 /**
@@ -162,6 +171,12 @@ export interface NextResponse {
 	 *  for the client's run-category accumulation. Pre-normalized server-side so
 	 *  native clients never need their own category tokenizer. */
 	categoryTokens?: string[];
+	/** Recurring-column label, present only on tangent picks that match one —
+	 *  computed server-side so native clients stay classifier-free. */
+	department?: string;
+	/** The pick's runner-up as a running-foot offer (trimmed to what the line
+	 *  renders + what a tap-to-dive needs). Clients own cadence and dedupe. */
+	foot?: { title: string; description: string | null };
 	/** True when the candidate pool is exhausted (no eligible next step). */
 	exhausted?: boolean;
 }

@@ -162,6 +162,12 @@ export const FEED = {
 	 * feed in an orbit. A dud tangent from a near-empty pool is worse than none.
 	 */
 	surpriseMinPool: 3,
+	/**
+	 * Minimum cards between running feet. The engine offers a foot on most picks
+	 * (~60% of pools have an eligible hooky runner-up); the client shows at most
+	 * one per this many cards so feet read as marginalia, not a second feed.
+	 */
+	footEvery: 3,
 	/** sessionStorage key used to persist the trail (titles + relations only — tiny). */
 	trailStorageKey: 'tangent:trail:v1',
 	/** Maximum trail nodes stored; older entries are dropped from the tail. */
