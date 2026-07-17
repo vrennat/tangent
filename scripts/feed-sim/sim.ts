@@ -259,9 +259,13 @@ interface JourneyResult {
 	arm: 'adaptive' | 'control';
 	rngSeed: number;
 	/** intrigue/spec are the engine's own hook/concreteness reads of each served card,
-	 *  recorded at walk time so cold-open feel is measurable offline. */
+	 *  recorded at walk time so cold-open feel is measurable offline. description and
+	 *  categories are recorded so consecutive-card jump distance (lexical + category
+	 *  overlap) is computable offline — see jumpdist.ts. */
 	path: {
 		title: string;
+		description: string | null;
+		categories: string[];
 		surprised: boolean;
 		onInterest: boolean;
 		tier: 'core' | 'broad' | null;
@@ -374,6 +378,8 @@ async function runJourney(
 
 		path.push({
 			title: c.title,
+			description: c.description,
+			categories: c.categories ?? [],
 			surprised: sel.surprised,
 			onInterest,
 			tier,

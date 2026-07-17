@@ -24,6 +24,7 @@ Requires [bun](https://bun.sh). From this directory:
 bun run sim.ts validate          # ~15 walks from German-history seeds — sanity check the cluster is reachable
 bun run sim.ts main 30           # full grid: 660 walks (cold-start + 5 personas × adaptive/control), maxLen 30
 bun run analyze.ts main          # aggregate results-main.json → report-main.md (+ stdout)
+bun run jumpdist.ts main         # consecutive-card jump-distance report → report-jumpdist-main.md
 bun run compare.ts               # diff results-baseline.json vs results-main.json (save a baseline first: cp results-main.json results-baseline.json)
 bun run diag.ts "Adolf Hitler"   # inspect how the scorer sees specific cached pages
 ```
@@ -43,6 +44,33 @@ bun run diag.ts "Adolf Hitler"   # inspect how the scorer sees specific cached p
 - **Caveat:** the engagement probabilities and the `tasteAffinity`-based on-interest
   classifier are modelling assumptions — read the adaptive-vs-control _lift_ (with its
   CI and n), not the absolute on-interest rate, as the robust signal.
+
+## What it found (2026-07-16): jump distance
+
+`jumpdist.ts` measures reader-felt topical jump between consecutively shown cards
+(category Jaccard, era/region-aware category-token Jaccard, lexical Jaccard), run
+against the full grid (660 journeys, 18,379 transitions) as the diagnosis gate for
+`docs/specs/2026-07-16-run-based-feed-design.md`:
+
+- **The felt-jump distribution is unimodal with no close/far separation.** A normal
+  top-K pick and a deliberate surprise are the same felt size on every lens
+  (cat-token mean 0.113 [CI 0.109–0.116] vs 0.124 [0.113–0.135]; lexical 0.102
+  [0.100–0.104] vs 0.093 [0.087–0.099]; direction inconsistent across lenses).
+  Median exact-category overlap between consecutive cards is **zero** — "one link
+  hop" is not topical closeness. This confirms the spec's premise directly.
+- **The single farthest jump in the system is the unframed snap-back after a
+  detour.** Post-surprise transitions (next card built from the pre-surprise tip)
+  are the most distant on all three lenses (lexical 0.049 [0.044–0.054] vs 0.102
+  normal) and nothing in the UI explains them. At the steady 18% epsilon, ~1 in 6
+  cards is followed by one. The run model's re-root-at-boundary design removes
+  this class of jump entirely (heals excepted).
+- **Candidate categories are truncated at fetch.** Only 63% of served cards carry
+  a non-hidden category; cache-wide, empty-category rate climbs from 18% at
+  candidate index 0 to 67% at index 49 (0 of 10,336 parents all-empty — a
+  per-request `cllimit` budget exhausting mid-batch, not a schema artifact). The
+  metadata batch must follow `clcontinue` before a category-affinity score means
+  anything; the position-correlated missingness would otherwise bias any
+  category signal toward early-position candidates, compounding the position boost.
 
 ## What it found (2026-06-13)
 

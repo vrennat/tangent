@@ -31,6 +31,32 @@ Why the current engine produces that feel:
 The engine stays a pure module; both entry points (web client `selectNext`, iOS via
 `/api/next`) pick the change up in lockstep by construction.
 
+## Sim diagnosis (2026-07-16)
+
+The diagnosis gate ran before any knob moved (`scripts/feed-sim/jumpdist.ts`, full
+grid: 660 journeys, 18,379 consecutive transitions; details in the feed-sim README):
+
+- **Premise confirmed, and then some.** The felt-jump distribution is unimodal with
+  no close/far separation at all: a normal top-K pick and a deliberate surprise are
+  the same felt size on every lens (lexical Jaccard 0.102 vs 0.093; category-token
+  0.113 vs 0.124 — direction inconsistent across lenses, CIs overlapping). Median
+  exact-category overlap between consecutive cards is zero. The engine has no
+  "close" mode to contrast its tangents against — which is what this spec builds.
+- **New finding: the farthest jump in the system is the detour snap-back.**
+  Post-surprise transitions (next card built from the pre-surprise tip) are the
+  most distant on all three lenses (lexical 0.049 vs 0.102 normal, separated CIs)
+  and completely unframed in the UI. At 18% steady epsilon, ~1 in 6 cards is
+  followed by one. This is strong independent support for tangent-re-roots: the
+  detour default doesn't just fail to help, it manufactures the largest unexplained
+  jumps in the feed.
+- **Prerequisite: category fetch truncation.** Only 63% of served cards carry a
+  non-hidden category, with empty-rate climbing from 18% (candidate index 0) to 67%
+  (index 49) — the batched metadata query's `cllimit` budget exhausts mid-batch and
+  `clcontinue` is not followed. `categoryAffinityWeight` is meaningless until this
+  is fixed, and the position-correlated missingness would bias the signal toward
+  early-position candidates, compounding the position boost. Fix lands first (see
+  Design).
+
 ## Goals
 
 - Within a run, consecutive cards feel like the same neighborhood (era/region/topic).
@@ -55,6 +81,16 @@ The engine stays a pure module; both entry points (web client `selectNext`, iOS 
   `recentTokens` today.
 
 ## Design
+
+### Step 0: complete category coverage (prerequisite)
+
+The candidate metadata batch (`action.ts:67-74`) must follow `clcontinue` until
+category lists are complete for every title in the batch (or chunk the batch so
+the 500-membership budget cannot exhaust). Cached sim data shows 36.5% of
+candidates currently carry empty categories, position-correlated. After the fix,
+re-run the sim coverage stat (`jumpdist.ts` reports it) and expect >95% of
+mainspace candidates to carry at least one non-hidden category. Everything below
+assumes this.
 
 ### Run state machine
 
@@ -171,9 +207,11 @@ picks them, same method as the `relevanceWeight` 2.5→4.0 and `specificityWeigh
   shallow-pool fall-through resets `runDepth`, first-run tangent by card 4.
 - Feed-sim (`scripts/feed-sim/`), adaptive arm vs control, reported as lift with
   noise bounds per repo convention:
-  - New **jump-distance metric**: per-step category-Jaccard between consecutive
-    cards. Current engine confirmed unimodal before knobs move (diagnosis check);
-    new engine shows bimodal separation (low in-run, high at breaks).
+  - **Jump-distance metric** (`jumpdist.ts`, done 2026-07-16): current engine
+    confirmed unimodal with no close/far separation. The new engine must show
+    bimodal separation (high in-run similarity, low at breaks) with
+    non-overlapping in-run vs break CIs on at least the lexical and
+    category-token lenses.
   - WWII/authoritarian-cluster landing rate ≤ 1.7% baseline; political-penalty
     fire rate reported.
   - **Neighborhood-escape rate**: fraction of run breaks landing outside the prior
