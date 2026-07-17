@@ -23,7 +23,7 @@ import { fetchExploreCandidates } from '../../src/lib/wikipedia/action.ts';
 import { selectNext } from '../../src/lib/feed/select.ts';
 import { buildEngineContext } from '../../src/lib/feed/context.ts';
 import { specificity, dfWeight } from '../../src/lib/feed/score.ts';
-import { tokenize } from '../../src/lib/feed/tokens.ts';
+import { categoryTokenSet, tokenize } from '../../src/lib/feed/tokens.ts';
 import { tasteAffinity, intrigue, type TasteId } from '../../src/lib/feed/taste.ts';
 import { isPolitical } from '../../src/lib/feed/politics.ts';
 import { FEED } from '../../src/lib/feed/config.ts';
@@ -59,7 +59,8 @@ const CACHE_PATH = `${import.meta.dir}/cache.json`;
 const cache: Record<string, Candidate[]> = existsSync(CACHE_PATH)
 	? JSON.parse(readFileSync(CACHE_PATH, 'utf8'))
 	: {};
-const inflight = new Map<string, Promise<Candidate[]>>();
+type FetchOutcome = { cands: Candidate[]; failed: boolean };
+const inflight = new Map<string, Promise<FetchOutcome>>();
 let fetchCount = 0;
 let cacheDirty = 0;
 
@@ -67,28 +68,31 @@ function sleep(ms: number) {
 	return new Promise((r) => setTimeout(r, ms));
 }
 
-async function getCandidates(title: string): Promise<Candidate[]> {
+/** `failed: true` = the fetch never succeeded (retries exhausted) — a walk ending
+ *  here is a harness artifact, not an engine dead end. Distinguished so walk-length
+ *  stats can separate the two (a 429-heavy cold run once read as 75% dead ends). */
+async function getCandidates(title: string): Promise<FetchOutcome> {
 	// Only non-empty results are cached, so a transient 429 never poisons a title.
-	if (cache[title] && cache[title].length > 0) return cache[title];
+	if (cache[title] && cache[title].length > 0) return { cands: cache[title], failed: false };
 	const pending = inflight.get(title);
 	if (pending) return pending;
-	const p = (async () => {
-		await sleep(120); // politeness on uncached fetches
+	const p = (async (): Promise<FetchOutcome> => {
+		await sleep(300); // politeness on uncached fetches (each is ~8-11 API requests now)
 		fetchCount++;
 		// Retry with exponential backoff — Wikipedia 429s under burst load.
-		for (let attempt = 0; attempt < 4; attempt++) {
+		for (let attempt = 0; attempt < 5; attempt++) {
 			try {
 				const cands = await fetchExploreCandidates(title);
 				if (cands.length > 0) {
 					cache[title] = cands;
 					if (++cacheDirty % 25 === 0) flushCache();
 				}
-				return cands;
+				return { cands, failed: false };
 			} catch {
-				await sleep(800 * 2 ** attempt); // 0.8s, 1.6s, 3.2s, 6.4s
+				await sleep(1000 * 2 ** attempt); // 1s .. 16s
 			}
 		}
-		return []; // give up — NOT cached, so it retries on a later run
+		return { cands: [], failed: true }; // give up — NOT cached, so it retries on a later run
 	})();
 	inflight.set(title, p);
 	const res = await p;
@@ -208,29 +212,32 @@ interface Ctx {
 	tokenAvoidWeights: Record<string, number>;
 	tokenDocFreq: Record<string, number>;
 	taste: TasteId;
-	recentTokens: Set<string>;
+	runTokens: Set<string>;
 	seenTitles: Set<string>;
 }
 function breakdown(c: Candidate, ctx: Ctx) {
 	const tokens = tokenize(`${c.title} ${c.description ?? ''}`);
 	let relevance = 0,
 		avoidance = 0,
-		overlap = 0;
+		runOverlap = 0;
 	for (const t of tokens) {
 		relevance += dfWeight(ctx.tokenWeights[t] ?? 0, ctx.tokenDocFreq[t] ?? 0);
 		avoidance += dfWeight(ctx.tokenAvoidWeights[t] ?? 0, ctx.tokenDocFreq[t] ?? 0);
-		if (ctx.recentTokens.has(t)) overlap += 1;
+		if (ctx.runTokens.has(t)) runOverlap += 1;
 	}
 	const spec = specificity(c);
 	const position = c.position ?? FEED.positionHalfLife;
 	const cats = c.categories ?? [];
 	const blob = `${c.title} ${c.description ?? ''} ${cats.join(' ')}`;
 	const political = isPolitical(blob);
+	// Base terms only — the run-phase terms (coherence in-run / variety at break)
+	// are reported informationally since a sink can land via either phase.
 	const terms = {
 		base: FEED.base,
 		relevance: FEED.relevanceWeight * Math.tanh(relevance / 2),
 		avoidance: -FEED.avoidanceWeight * Math.tanh(avoidance / 2),
-		overlap: overlap * FEED.varietyPenalty,
+		coherenceIfInRun: FEED.coherenceWeight * Math.tanh(runOverlap / 2),
+		varietyIfBreak: runOverlap * FEED.varietyPenalty,
 		image: c.thumbnail ? FEED.imageBonus : 0,
 		related: c.relation === 'related' ? FEED.relatedPenalty : 0,
 		taste: FEED.tasteWeight * tasteAffinity(c, ctx.taste),
@@ -267,6 +274,10 @@ interface JourneyResult {
 		description: string | null;
 		categories: string[];
 		surprised: boolean;
+		/** This pick started a new run (tangent or drift fall-through). */
+		runReset: boolean;
+		/** The reader fast-skipped this tangent; the chain healed back past it. */
+		healed: boolean;
 		onInterest: boolean;
 		tier: 'core' | 'broad' | null;
 		intrigue: number;
@@ -283,6 +294,10 @@ interface JourneyResult {
 		terms: Record<string, number>;
 	}[];
 	deadEndedAt: number | null;
+	/** Why the walk ended early: 'fetch-failed' is a harness/network artifact;
+	 *  'no-links' (page with no usable candidates) and 'engine-exhausted'
+	 *  (candidates exist but none eligible) are real dead ends. */
+	deadEndKind: 'fetch-failed' | 'no-links' | 'engine-exhausted' | null;
 }
 
 async function runJourney(
@@ -303,20 +318,30 @@ async function runJourney(
 	let firstCoreStep: number | null = null;
 	let firstBroadStep: number | null = null;
 	let deadEndedAt: number | null = null;
+	let deadEndKind: JourneyResult['deadEndKind'] = null;
 
-	// behavior: react to a revealed card (adaptive arm only mutates the profile)
-	const react = (title: string, description: string | null, persona: Persona) => {
+	// behavior: react to a revealed card (adaptive arm only mutates the profile).
+	// Returns 'skipped' so the traversal can heal a fast-skipped tangent.
+	const react = (
+		title: string,
+		description: string | null,
+		persona: Persona
+	): 'skipped' | 'engaged' | 'neutral' => {
 		const text = `${title} ${description ?? ''}`;
 		profile.recordSeen(title, text);
-		if (arm === 'control' || persona === 'balanced') return;
+		if (arm === 'control' || persona === 'balanced') return 'neutral';
 		const onInterest =
 			tasteAffinity({ title, description, thumbnail: null, isDisambiguation: false, relation: 'link', categories: [], position: 0 }, persona) > 0;
 		if (onInterest) {
 			profile.dwell(title, text); // a reader reads what interests them
 			if (behaviorRng() < P_LIKE) profile.like(title, text);
-		} else if (behaviorRng() < P_SKIP) {
-			profile.skip(title, text);
+			return 'engaged';
 		}
+		if (behaviorRng() < P_SKIP) {
+			profile.skip(title, text);
+			return 'skipped';
+		}
+		return 'neutral';
 	};
 
 	// seed
@@ -324,19 +349,29 @@ async function runJourney(
 	react(seed, seedDesc, persona);
 	visited.push({ title: seed, description: seedDesc });
 	seenTitles.add(seed);
-	let tip = seed; // last non-surprise title
+	let tip = seed;
+
+	// Run accounting (mirrors feedState.#runState / FeedStore.sessionPayload):
+	// the current run's cards, boundary inclusive, feeding coherence in-run and
+	// variety at a break. Tangents re-root; a fast-skipped tangent heals back.
+	type RunCard = { title: string; description: string | null; catTokens: Set<string> };
+	let run: RunCard[] = [{ title: seed, description: seedDesc, catTokens: new Set() }];
+	let preTangent: { run: RunCard[]; tip: string } | null = null;
 
 	for (let step = 1; step <= maxLen; step++) {
-		const candidates = await getCandidates(tip);
-		if (!candidates || candidates.length === 0) {
+		const { cands: candidates, failed } = await getCandidates(tip);
+		if (candidates.length === 0) {
 			deadEndedAt = step;
+			deadEndKind = failed ? 'fetch-failed' : 'no-links';
 			break;
 		}
 
-		// recentTokens: window excludes the immediate parent (matches feedState.#context)
-		const recentTokens = new Set<string>();
-		for (const card of visited.slice(-(FEED.recentWindow + 1), -1))
-			for (const t of tokenize(`${card.title} ${card.description ?? ''}`)) recentTokens.add(t);
+		const runTokens = new Set<string>();
+		const runCategories = new Set<string>();
+		for (const card of run) {
+			for (const t of tokenize(`${card.title} ${card.description ?? ''}`)) runTokens.add(t);
+			for (const t of card.catTokens) runCategories.add(t);
+		}
 
 		const interest = {
 			tokenWeights: profile.tokenWeights,
@@ -346,14 +381,17 @@ async function runJourney(
 		};
 		const session = {
 			seenTitles: [...seenTitles],
-			recentTokens: [...recentTokens],
 			stepIndex: visited.length,
-			noSurprise: false
+			noSurprise: false,
+			runDepth: run.length,
+			runTokens: [...runTokens],
+			runCategories: [...runCategories]
 		};
 		const ctx = buildEngineContext(interest, session, engineRng);
 		const sel = selectNext(candidates, ctx);
 		if (!sel) {
 			deadEndedAt = step;
+			deadEndKind = 'engine-exhausted';
 			break;
 		}
 		const c = sel.candidate;
@@ -368,7 +406,7 @@ async function runJourney(
 				tokenAvoidWeights: profile.tokenAvoidWeights,
 				tokenDocFreq: profile.tokenDocFreq,
 				taste: 'balanced',
-				recentTokens,
+				runTokens,
 				seenTitles
 			});
 			sinkLandings.push({ step, title: c.title, tier, political: bd.political, score: bd.score, terms: bd.terms });
@@ -376,20 +414,46 @@ async function runJourney(
 			if (firstBroadStep === null) firstBroadStep = step;
 		}
 
+		// Advance the chain: every pick re-roots or extends the run.
+		const runCard: RunCard = {
+			title: c.title,
+			description: c.description,
+			catTokens: categoryTokenSet(c.categories)
+		};
+		if (sel.runReset) {
+			preTangent = sel.surprised ? { run, tip } : null; // only tangents can heal
+			run = [runCard];
+		} else {
+			preTangent = null;
+			run = [...run, runCard];
+		}
+		tip = c.title;
+
+		const reaction = react(c.title, c.description, persona);
+		visited.push({ title: c.title, description: c.description });
+		seenTitles.add(c.title);
+
+		// Heal: the reader fast-skipped a tangent — rebuild from the pre-tangent tip
+		// with the pre-tangent run (the healed card stays seen, matching the client).
+		const healed = sel.surprised && reaction === 'skipped' && preTangent !== null;
+		if (healed && preTangent) {
+			run = preTangent.run;
+			tip = preTangent.tip;
+			preTangent = null;
+		}
+
 		path.push({
 			title: c.title,
 			description: c.description,
 			categories: c.categories ?? [],
 			surprised: sel.surprised,
+			runReset: sel.runReset,
+			healed,
 			onInterest,
 			tier,
 			intrigue: intrigue(c),
 			spec: specificity(c)
 		});
-		react(c.title, c.description, persona);
-		visited.push({ title: c.title, description: c.description });
-		seenTitles.add(c.title);
-		if (!sel.surprised) tip = c.title; // surprise = detour; chain continues from pre-surprise tip
 	}
 
 	return {
@@ -401,7 +465,8 @@ async function runJourney(
 		firstCoreStep,
 		firstBroadStep,
 		sinkLandings,
-		deadEndedAt
+		deadEndedAt,
+		deadEndKind
 	};
 }
 
@@ -502,7 +567,9 @@ async function main() {
 
 	console.error(`Running ${tasks.length} journeys (mode=${mode}, maxLen=${MAXLEN})...`);
 	const t0 = Date.now();
-	const results = await runAll(tasks, 3);
+	// Concurrency 2: each uncached tip now costs ~8-11 API requests (categories
+	// ride a second pass), so 3 parallel journeys under a cold cache draws 429s.
+	const results = await runAll(tasks, 2);
 	flushCache();
 	console.error(`Done in ${((Date.now() - t0) / 1000).toFixed(0)}s, ${fetchCount} live fetches, ${Object.keys(cache).length} cached titles.`);
 

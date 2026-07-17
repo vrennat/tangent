@@ -1,7 +1,8 @@
 # Run-Based Feed: Coherent Runs, Framed Tangents
 
 Date: 2026-07-16
-Status: draft for review
+Status: implemented and sim-validated 2026-07-17 (acceptance results in
+scripts/feed-sim/README.md, "run-based engine validation")
 Source: UJBR/toilet-reader direction + Ben's "jumps between topics feel too great" feedback (2026-07-16 session)
 
 ## Overview

@@ -35,6 +35,8 @@ interface PathStep {
 	description: string | null;
 	categories: string[];
 	surprised: boolean;
+	/** Run-based engine only: this pick started a new run without a tangent. */
+	runReset?: boolean;
 }
 interface Journey {
 	seed: string;
@@ -43,7 +45,7 @@ interface Journey {
 	path: PathStep[];
 }
 
-type TransitionKind = 'normal' | 'surprise' | 'post-surprise';
+type TransitionKind = 'normal' | 'surprise' | 'drift' | 'post-surprise';
 interface Transition {
 	journey: number;
 	kind: TransitionKind;
@@ -79,11 +81,16 @@ function transitions(journeys: Journey[]): Transition[] {
 		for (let i = 1; i < j.path.length; i++) {
 			const prev = j.path[i - 1];
 			const cur = j.path[i];
+			// Under the run-based engine 'normal' means in-run, 'drift' is a break whose
+			// tangent pool was too shallow, and 'post-surprise' only follows healed
+			// tangents. Old results lack runReset; the taxonomy degrades gracefully.
 			const kind: TransitionKind = cur.surprised
 				? 'surprise'
-				: prev.surprised
-					? 'post-surprise'
-					: 'normal';
+				: cur.runReset
+					? 'drift'
+					: prev.surprised
+						? 'post-surprise'
+						: 'normal';
 			const lex = jaccard(
 				tokenSet(`${prev.title} ${prev.description ?? ''}`),
 				tokenSet(`${cur.title} ${cur.description ?? ''}`)
@@ -232,7 +239,7 @@ const steps = journeys.flatMap((j) => j.path);
 const withCats = steps.filter((p) => p.categories.length > 0).length;
 const avgCats = steps.reduce((a, p) => a + p.categories.length, 0) / Math.max(1, steps.length);
 
-const kinds: TransitionKind[] = ['normal', 'surprise', 'post-surprise'];
+const kinds: TransitionKind[] = ['normal', 'surprise', 'drift', 'post-surprise'];
 const metrics = [
 	['catJaccard', 'Category Jaccard (exact titles)'],
 	['catTokenJaccard', 'Category token Jaccard (era/region-aware)'],
@@ -263,10 +270,16 @@ for (const [key, label] of metrics) {
 			summarize(usable.map((t) => ({ journey: t.journey, value: t[key]! })))
 		)
 	);
+	const KIND_LABEL: Record<TransitionKind, string> = {
+		normal: 'in-run pick',
+		surprise: 'into a tangent',
+		drift: 'run break without a jump (shallow tangent pool)',
+		'post-surprise': 'back out of a healed/detoured tangent'
+	};
 	for (const kind of kinds) {
 		out.push(
 			renderSummary(
-				`${kind} (${kind === 'surprise' ? 'into a tangent' : kind === 'post-surprise' ? 'back out of a detour' : 'engine top-K pick'})`,
+				`${kind} (${KIND_LABEL[kind]})`,
 				summarize(
 					usable.filter((t) => t.kind === kind).map((t) => ({ journey: t.journey, value: t[key]! }))
 				)

@@ -45,6 +45,32 @@ bun run diag.ts "Adolf Hitler"   # inspect how the scorer sees specific cached p
   classifier are modelling assumptions — read the adaptive-vs-control _lift_ (with its
   CI and n), not the absolute on-interest rate, as the robust signal.
 
+## What it found (2026-07-17): run-based engine validation
+
+Full grid on the run-based engine (complete categories in cache; both engines
+measured the same night, same harness):
+
+- **Bimodal jump distance achieved.** In-run picks vs tangents, non-overlapping
+  CIs on all three lenses (cat-token 0.187 [0.184–0.191] vs 0.117 [0.113–0.122];
+  lexical 0.170 vs 0.070; exact-cat 0.073 vs 0.027). Old engine: no separation
+  (0.113 vs 0.124, inverted). The post-tangent snap-back class is gone — the card
+  after a tangent is now as coherent with it as any in-run pick (cat-token 0.166
+  vs the old 0.082).
+- **Attractor safety improved.** Cold-start WWII/authoritarian cluster drift 0.0%
+  (was 1.7%); zero core-cluster landings in 660 journeys, 7 broad-tier total.
+- **No walk-length regression.** Excluding fetch-failure artifacts (instrumented
+  via `deadEndKind` after a 429-heavy cold run read as 75% dead ends), real
+  engine dead ends: 0 of 562; walks run to the 30-card cap.
+- **Learning lift did not regress**: pooled adaptive−control +3.5% ±~3 (old
+  engine same-night baseline: +1.7% ±~2.7 — difference within noise). Absolute
+  on-interest rose in both arms (control 18.2% → 22.0%): coherent runs improve
+  topical locality independent of learning.
+- **Honest gaps:** (1) tangent jump size is bounded by candidate generation (one
+  link hop from the tip) — a "farther tangent source" is future work if felt
+  bigness matters; (2) cold-start first breaks are guaranteed (100% within 5
+  cards) but only 48% clear the hook gate (rest drift) — mainstream seed pools
+  are intrigue-poor, so the first break often lands unframed.
+
 ## What it found (2026-07-16): jump distance
 
 `jumpdist.ts` measures reader-felt topical jump between consecutively shown cards

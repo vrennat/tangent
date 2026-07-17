@@ -3,3 +3,4 @@ cache.json
 results-*.json
 run-*.log
 report-*.md
+categories-cache.json
