@@ -11,7 +11,9 @@ const interest: InterestPayload = {
 
 const session: SessionPayload = {
 	seenTitles: ['Roman Empire', 'Aqueduct'],
-	recentTokens: ['roman', 'water'],
+	runDepth: 2,
+	runTokens: ['roman', 'water'],
+	runCategories: ['ancient', 'rome'],
 	noSurprise: true,
 	stepIndex: 7
 };
@@ -27,11 +29,33 @@ describe('buildEngineContext', () => {
 			expect(ctx.taste).toBe('history');
 			expect(ctx.seenTitles).toBeInstanceOf(Set);
 			expect(ctx.seenTitles.has('Aqueduct')).toBe(true);
-			expect(ctx.recentTokens).toBeInstanceOf(Set);
-			expect(ctx.recentTokens.has('water')).toBe(true);
+			expect(ctx.runDepth).toBe(2);
+			expect(ctx.runTokens).toBeInstanceOf(Set);
+			expect(ctx.runTokens.has('water')).toBe(true);
+			expect(ctx.runCategories).toBeInstanceOf(Set);
+			expect(ctx.runCategories.has('rome')).toBe(true);
 			expect(ctx.noSurprise).toBe(true);
 			expect(ctx.stepIndex).toBe(7);
 			expect(ctx.rng()).toBe(0.5);
+		});
+	});
+
+	describe('older clients without run accounting', () => {
+		it('falls back to the recent-tokens window as the run-token approximation', () => {
+			const ctx = buildEngineContext(interest, {
+				seenTitles: [],
+				recentTokens: ['roman', 'water'],
+				stepIndex: 7
+			});
+
+			expect(ctx.runTokens.has('roman')).toBe(true);
+			expect(ctx.runCategories.size).toBe(0);
+		});
+
+		it('cycles runDepth on stepIndex so the run/break rhythm still happens', () => {
+			// Cycle length = runMinLength (3) + ramp length (3) = 6: step 7 -> depth 1.
+			const ctx = buildEngineContext(interest, { seenTitles: [], stepIndex: 7 });
+			expect(ctx.runDepth).toBe(1);
 		});
 	});
 
@@ -47,13 +71,12 @@ describe('buildEngineContext', () => {
 
 	describe('defaults', () => {
 		it('tolerates missing fields by defaulting to empty', () => {
-			const ctx = buildEngineContext(
-				{ tokenWeights: {}, tokenDocFreq: {} },
-				{ seenTitles: [], recentTokens: [] }
-			);
+			const ctx = buildEngineContext({ tokenWeights: {}, tokenDocFreq: {} }, { seenTitles: [] });
 
 			expect(ctx.seenTitles.size).toBe(0);
-			expect(ctx.recentTokens.size).toBe(0);
+			expect(ctx.runTokens.size).toBe(0);
+			expect(ctx.runCategories.size).toBe(0);
+			expect(ctx.runDepth).toBe(0);
 			expect(ctx.tokenAvoidWeights).toEqual({});
 			expect(ctx.taste).toBe('balanced');
 			expect(ctx.noSurprise).toBe(false);
@@ -63,7 +86,7 @@ describe('buildEngineContext', () => {
 		it('normalizes unknown taste values for older or malformed clients', () => {
 			const ctx = buildEngineContext(
 				{ tokenWeights: {}, tokenDocFreq: {}, taste: 'weird' as never },
-				{ seenTitles: [], recentTokens: [] }
+				{ seenTitles: [] }
 			);
 
 			expect(ctx.taste).toBe('balanced');

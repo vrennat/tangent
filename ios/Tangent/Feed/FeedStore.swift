@@ -32,7 +32,6 @@ final class FeedStore {
 
 	/// How many cards to keep fetched beyond the one currently in view.
 	private let lookahead = 3
-	private let recentWindow = 5
 	/// Trail persistence: revealed chain capped like the web's trailCap; on relaunch the
 	/// most recent few cards are refetched (cold-cache budget) if the trail is fresh.
 	/// The freshness window stands in for the web's sessionStorage lifetime — a trail
@@ -60,7 +59,7 @@ final class FeedStore {
 				status = .error
 				return
 			}
-			cards = [makeCard(article, from: "", relation: .seed)]
+			cards = [makeCard(article, from: "", relation: .seed, runStart: true)]
 			status = .ready
 			// Stock the chain ahead so the pager has pages to scroll into immediately.
 			await ensureAhead(from: 0)
@@ -112,7 +111,11 @@ final class FeedStore {
 			// Fetch misses drop out of the chain (the web keeps them as tombstones in the
 			// panel; here the trail is derived from cards, so they simply vanish).
 			guard let article else { continue }
-			restored.append(makeCard(article, from: node.fromTitle, relation: node.relation))
+			restored.append(makeCard(
+				article, from: node.fromTitle, relation: node.relation,
+				// Pre-run-accounting snapshots lack the flag: boundary relations stand in.
+				runStart: node.runStart ?? (node.relation != .link)
+			))
 		}
 		guard !restored.isEmpty else {
 			status = .idle
@@ -142,7 +145,9 @@ final class FeedStore {
 		if lastRevealedIndex + 1 < cards.count {
 			cards.removeSubrange((lastRevealedIndex + 1)...)
 		}
-		let placeholder = makeCard(.pendingStub(title: title), from: from, relation: .dive, pending: true)
+		let placeholder = makeCard(
+			.pendingStub(title: title), from: from, relation: .dive, runStart: true, pending: true
+		)
 		cards.append(placeholder)
 		status = .ready
 		Task { await resolvePending(id: placeholder.id, title: title) }
@@ -160,7 +165,8 @@ final class FeedStore {
 			}
 			guard let index = cards.firstIndex(where: { $0.id == id }) else { return }
 			cards[index] = FeedCard(
-				id: id, article: article, fromTitle: cards[index].fromTitle, relation: .dive
+				id: id, article: article, fromTitle: cards[index].fromTitle,
+				relation: .dive, runStart: true
 			)
 			profile.recordClickthrough(article)
 			profile.recordSeen(article)
@@ -199,17 +205,15 @@ final class FeedStore {
 			fromTitle: tip.article.title,
 			mode: "related",
 			interest: profile.interestPayload,
-			session: SessionPayload(
-				seenTitles: cards.map { $0.article.title },
-				recentTokens: recentTokens(),
-				noSurprise: true,
-				stepIndex: cards.count
-			)
+			session: sessionPayload(noSurprise: true)
 		)
 		do {
 			let res = try await api.next(req)
 			guard let article = res.article else { return nil }
-			let card = makeCard(article, from: tip.article.title, relation: .related)
+			let card = makeCard(
+				article, from: tip.article.title, relation: .related,
+				runStart: true, categoryTokens: res.categoryTokens ?? []
+			)
 			cards.append(card)
 			profile.recordSeen(article)
 			status = .ready
@@ -242,12 +246,7 @@ final class FeedStore {
 			fromTitle: tip.article.title,
 			mode: nil,
 			interest: profile.interestPayload,
-			session: SessionPayload(
-				seenTitles: cards.map { $0.article.title },
-				recentTokens: recentTokens(),
-				noSurprise: false,
-				stepIndex: cards.count
-			)
+			session: sessionPayload(noSurprise: false)
 		)
 
 		do {
@@ -258,10 +257,14 @@ final class FeedStore {
 			if res.exhausted == true { status = .exhausted; return false }
 			guard let article = res.article else { return false }
 
-			// Surprise breadcrumbs reference the card the user was actually on, not the
+			// Tangent breadcrumbs reference the card the user was actually on, not the
 			// (possibly earlier) effective tip the engine explored from.
 			let from = res.surprised ? (cards.last?.article.title ?? tip.article.title) : tip.article.title
-			cards.append(makeCard(article, from: from, relation: res.relation))
+			cards.append(makeCard(
+				article, from: from, relation: res.relation,
+				runStart: res.runReset ?? res.surprised,
+				categoryTokens: res.categoryTokens ?? []
+			))
 			return true
 		} catch {
 			guard version == chainVersion else { return false }
@@ -270,29 +273,42 @@ final class FeedStore {
 		}
 	}
 
-	/// Last non-surprise card, so a dud detour self-heals (the next card builds from
-	/// the pre-surprise tip rather than chasing the tangent).
+	/// The chain tip. Tangents re-root the feed (run-based engine); the web's
+	/// fast-skip heal has no equivalent here yet, so the tip is simply the last card.
 	private func effectiveTip() -> FeedCard? {
-		cards.last(where: { $0.relation != .surprise }) ?? cards.last
+		cards.last
 	}
 
-	/// Tokens from the recent window, excluding the immediate parent (mirrors the web's
-	/// slice that catches repetition loops one level back from the linking article).
-	private func recentTokens() -> [String] {
-		guard cards.count > 1 else { return [] }
-		let window = cards.suffix(recentWindow + 1).dropLast()
-		var tokens = Set<String>()
-		for card in window { tokens.formUnion(card.article.tokens) }
-		return Array(tokens)
+	/// Run accounting sent to the engine: the current run starts at the last
+	/// runStart card and accumulates article tokens + category tokens from there.
+	/// Mirrors the web's feedState.#runState.
+	private func sessionPayload(noSurprise: Bool) -> SessionPayload {
+		let start = cards.lastIndex(where: { $0.runStart }) ?? 0
+		var runTokens = Set<String>()
+		var runCategories = Set<String>()
+		for card in cards[start...] {
+			runTokens.formUnion(card.article.tokens)
+			runCategories.formUnion(card.categoryTokens)
+		}
+		return SessionPayload(
+			seenTitles: cards.map { $0.article.title },
+			noSurprise: noSurprise,
+			stepIndex: cards.count,
+			runDepth: cards.count - start,
+			runTokens: Array(runTokens),
+			runCategories: Array(runCategories)
+		)
 	}
 
 	private func makeCard(
-		_ article: Article, from: String, relation: Relation, pending: Bool = false
+		_ article: Article, from: String, relation: Relation,
+		runStart: Bool = false, categoryTokens: [String] = [], pending: Bool = false
 	) -> FeedCard {
 		defer { counter += 1 }
 		return FeedCard(
 			id: "\(article.title)#\(counter)", article: article,
-			fromTitle: from, relation: relation, pending: pending
+			fromTitle: from, relation: relation,
+			runStart: runStart, categoryTokens: categoryTokens, pending: pending
 		)
 	}
 
@@ -303,6 +319,9 @@ final class FeedStore {
 			let title: String
 			let relation: Relation
 			let fromTitle: String
+			/// Optional so snapshots saved before run accounting still decode; restore
+			/// falls back to boundary relations for those.
+			let runStart: Bool?
 		}
 		let seedTitle: String
 		let nodes: [Node]
@@ -312,7 +331,10 @@ final class FeedStore {
 	private func saveTrail() {
 		guard let seedTitle, !cards.isEmpty else { return }
 		let nodes = revealedTrail.suffix(trailCap).map {
-			TrailSnapshot.Node(title: $0.article.title, relation: $0.relation, fromTitle: $0.fromTitle)
+			TrailSnapshot.Node(
+				title: $0.article.title, relation: $0.relation,
+				fromTitle: $0.fromTitle, runStart: $0.runStart
+			)
 		}
 		let snap = TrailSnapshot(seedTitle: seedTitle, nodes: Array(nodes), savedAt: Date())
 		if let data = try? JSONEncoder().encode(snap) {

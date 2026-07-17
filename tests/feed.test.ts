@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import type { Candidate } from '../src/lib/wikipedia/types';
 import type { EngineContext } from '../src/lib/feed/types';
-import { scoreCandidate, specificity } from '../src/lib/feed/score';
+import {
+	categoryAffinity,
+	coherence,
+	runVariety,
+	scoreCandidate,
+	specificity
+} from '../src/lib/feed/score';
 import { selectNext } from '../src/lib/feed/select';
 import { FEED } from '../src/lib/feed/config';
 
@@ -24,10 +30,12 @@ function context(overrides: Partial<EngineContext> = {}): EngineContext {
 		tokenAvoidWeights: {},
 		tokenDocFreq: {},
 		taste: 'balanced',
-		recentTokens: new Set(),
+		runDepth: 0,
+		runTokens: new Set(),
+		runCategories: new Set(),
 		seenTitles: new Set(),
 		noSurprise: false,
-		stepIndex: 0,
+		stepIndex: 10,
 		rng: () => 0.5,
 		...overrides
 	};
@@ -70,11 +78,15 @@ describe('scoreCandidate', () => {
 			expect(withImage).toBeGreaterThan(without);
 		});
 
-		it('penalizes overlap with recently shown articles (variety)', () => {
-			const ctx = context({ recentTokens: new Set(['water', 'channel']) });
-			const monotonous = scoreCandidate(candidate(), ctx);
-			const fresh = scoreCandidate(candidate({ title: 'Volcano', description: 'erupting mountain' }), ctx);
-			expect(fresh).toBeGreaterThan(monotonous);
+		it('keeps base scoring free of run-phase terms (selectNext composes them)', () => {
+			const ctx = context({ runTokens: new Set(['water', 'channel']) });
+			const overlapping = scoreCandidate(candidate(), ctx);
+			const fresh = scoreCandidate(
+				candidate({ title: 'Volcano', description: 'erupting mountain' }),
+				ctx
+			);
+			// Same intrinsic profile either way — neighborhood shaping is a phase decision.
+			expect(overlapping).toBeCloseTo(fresh, 5);
 		});
 
 		it('penalizes candidates matching skipped tokens', () => {
@@ -136,15 +148,6 @@ describe('scoreCandidate', () => {
 			expect(repeated).toBeCloseTo(single, 5);
 		});
 
-		it('applies the variety penalty once for a token repeated within a candidate', () => {
-			const ctx = context({ recentTokens: new Set(['aqueduct']) });
-			const repeated = scoreCandidate(
-				candidate({ title: 'Aqueduct', description: 'stone aqueduct' }),
-				ctx
-			);
-			const single = scoreCandidate(candidate({ title: 'Aqueduct', description: 'stone' }), ctx);
-			expect(repeated).toBeCloseTo(single, 5);
-		});
 	});
 
 	describe('political dampening', () => {
@@ -223,84 +226,71 @@ describe('selectNext', () => {
 			expect(selectNext(pool, ctx)?.candidate.title).toBe('Urban legend');
 		});
 
-		it('uses the taste pacing slot to lean harder into explicit flavor', () => {
-			// Step 12 = regular-loop slot 2 ('taste') once the cold open (steps 0-4) has passed.
-			const ctx = context({ taste: 'technology', stepIndex: 12, rng: seq([0.99, 0]) });
+		it('marks in-run picks as neither surprised nor run-resetting', () => {
+			const result = selectNext([candidate()], context({ rng: seq([0.99, 0]) }));
+			expect(result?.surprised).toBe(false);
+			expect(result?.runReset).toBe(false);
+		});
+	});
+
+	describe('in-run coherence', () => {
+		it('pulls the pick toward candidates sharing tokens with the run', () => {
+			const ctx = context({
+				runTokens: new Set(['roman', 'empire', 'rome']),
+				rng: seq([0.99, 0])
+			});
 			const pool = [
-				candidate({ title: 'Canal', description: 'water channel', position: 0 }),
+				candidate({ title: 'Trade route', description: 'transport network', position: 0 }),
+				candidate({ title: 'Roman roads', description: 'roads of the Roman Empire', position: 0 })
+			];
+
+			expect(selectNext(pool, ctx)?.candidate.title).toBe('Roman roads');
+		});
+
+		it('pulls the pick toward candidates sharing categories with the run (era/region)', () => {
+			// Category tokens carry the same-time-same-place signal: the shared
+			// "ancient"/"rome"/"punic" tokens must beat a positional advantage.
+			const ctx = context({
+				runCategories: new Set(['ancient', 'rome', 'punic', 'wars']),
+				rng: seq([0.99, 0])
+			});
+			const pool = [
 				candidate({
-					title: 'Packet switching',
-					description: 'computer networking technology',
-					categories: ['Category:Internet technology'],
-					position: 12
+					title: 'Christianity',
+					description: 'religion',
+					categories: ['Category:Religions'],
+					position: 0
+				}),
+				candidate({
+					title: 'Carthage',
+					description: 'city',
+					categories: ['Category:Ancient Rome', 'Category:Punic Wars'],
+					position: 5
 				})
 			];
 
-			expect(selectNext(pool, ctx)?.candidate.title).toBe('Packet switching');
+			expect(selectNext(pool, ctx)?.candidate.title).toBe('Carthage');
 		});
 
-		it('substitutes intrigue for the taste slot when taste is balanced', () => {
-			// tasteAffinity is identically 0 for balanced, so without a fallback the
-			// taste slot is a dead spot in the loop for every user who never picked a
-			// flavor. Same pool and step as the explicit-taste test above, balanced.
-			const ctx = context({ stepIndex: 12, rng: seq([0.99, 0]) });
-			const pool = [
-				candidate({ title: 'Canal', description: 'water channel', position: 0 }),
-				candidate({ title: 'Lost city', description: 'abandoned ancient settlement', position: 12 })
-			];
-
-			expect(selectNext(pool, ctx)?.candidate.title).toBe('Lost city');
+		it('counts a shared token once even when repeated within a candidate', () => {
+			const ctx = context({ runTokens: new Set(['aqueduct']) });
+			const repeated = coherence(candidate({ title: 'Aqueduct', description: 'stone aqueduct' }), ctx);
+			const single = coherence(candidate({ title: 'Aqueduct', description: 'stone' }), ctx);
+			expect(repeated).toBeCloseTo(single, 5);
 		});
 
-		it('uses the intrigue pacing slot to pick a hooky lateral', () => {
-			// Step 13 = regular-loop slot 3 ('intrigue') after the cold open.
-			const ctx = context({ stepIndex: 13, rng: seq([0.99, 0]) });
-			const pool = [
-				candidate({ title: 'Canal', description: 'water channel', position: 0 }),
-				candidate({ title: 'Lost city', description: 'abandoned ancient settlement', position: 12 })
-			];
-
-			expect(selectNext(pool, ctx)?.candidate.title).toBe('Lost city');
-		});
-
-		it('uses the specificity pacing slot to prefer vivid concrete articles', () => {
-			// Step 14 = regular-loop slot 4 ('specific') after the cold open.
-			const ctx = context({ stepIndex: 14, rng: seq([0.99, 0]) });
-			const pool = [
-				candidate({ title: 'Entity', description: 'Something that exists', position: 0 }),
-				candidate({ title: 'New Orleans', description: 'city founded in 1718', position: 10 })
-			];
-
-			expect(selectNext(pool, ctx)?.candidate.title).toBe('New Orleans');
+		it('keeps digit-bearing era tokens in the category signal', () => {
+			const ctx = context({ runCategories: new Set(['1st-century', 'bc']) });
+			const dated = candidate({
+				title: 'Mark Antony',
+				description: 'Roman politician',
+				categories: ['Category:1st-century BC Romans']
+			});
+			expect(categoryAffinity(dated, ctx)).toBeGreaterThan(0);
 		});
 	});
 
-	describe('cold open', () => {
-		// At step 1 every candidate is one hop from the seed — closeness is guaranteed
-		// by construction — so the opening steps spend their slots on hooks instead of
-		// the regular loop's close/close/taste start.
-		it('opens on an intrigue slot: step 1 prefers a hooky lateral over the prominent link', () => {
-			const ctx = context({ stepIndex: 1, rng: seq([0.99, 0]) });
-			const pool = [
-				candidate({ title: 'Canal', description: 'water channel', position: 0 }),
-				candidate({ title: 'Lost city', description: 'abandoned ancient settlement', position: 12 })
-			];
-
-			expect(selectNext(pool, ctx)?.candidate.title).toBe('Lost city');
-		});
-
-		it('follows with a specificity slot: step 2 prefers a vivid dated article', () => {
-			const ctx = context({ stepIndex: 2, rng: seq([0.99, 0]) });
-			const pool = [
-				candidate({ title: 'Canal', description: 'water channel', position: 0 }),
-				candidate({ title: 'New Orleans', description: 'city founded in 1718', position: 50 })
-			];
-
-			expect(selectNext(pool, ctx)?.candidate.title).toBe('New Orleans');
-		});
-	});
-
-	describe('surprise mode', () => {
+	describe('run breaks (tangents)', () => {
 		function neutralPool(n: number): Candidate[] {
 			return Array.from({ length: n }, (_, i) =>
 				candidate({
@@ -323,84 +313,128 @@ describe('selectNext', () => {
 			);
 		}
 
-		/** Mildly hooky: enough intrigue to clear the surprise floor, not enough to win
-		 *  an intrigue pacing slot outright — keeps them out of the paced top-K. */
-		function mildHookTail(n: number): Candidate[] {
-			return Array.from({ length: n }, (_, i) =>
-				candidate({
-					title: `Curio ${'ABCDEFGHIJ'[i]}`,
-					description: 'oldest bridge',
-					thumbnail: null,
-					position: 100 + i
-				})
-			);
-		}
+		/** A run deep enough that the break is certain (ramp end = 1). */
+		const BREAK_DEPTH = FEED.runMinLength + FEED.runBreakRamp.length - 1;
 
-		// Steady-state step: past the cold open, past the epsilon schedule ('close' slot).
-		const STEADY_STEP = 10;
-
-		it('fires when RNG falls under the epsilon and the hooky surprise pool is large enough', () => {
+		it('never breaks before the run reaches runMinLength, even with rng at zero', () => {
 			const pool = [...neutralPool(FEED.topK), ...hookyTail(FEED.surpriseMinPool + 1)];
-			const ctx = context({ stepIndex: STEADY_STEP, rng: seq([0, 0]) });
+			const ctx = context({ runDepth: FEED.runMinLength - 1, rng: seq([0, 0]) });
+			const result = selectNext(pool, ctx);
+			expect(result?.surprised).toBe(false);
+			expect(result?.runReset).toBe(false);
+		});
+
+		it('breaks probabilistically on the ramp once the run is old enough', () => {
+			const pool = [...neutralPool(FEED.topK), ...hookyTail(FEED.surpriseMinPool + 1)];
+			// At runDepth = runMinLength the ramp starts at 0.45: a 0.3 roll breaks...
+			const breaks = selectNext(pool, context({ runDepth: FEED.runMinLength, rng: seq([0.3, 0]) }));
+			expect(breaks?.surprised).toBe(true);
+			// ...and a 0.6 roll does not.
+			const stays = selectNext(pool, context({ runDepth: FEED.runMinLength, rng: seq([0.6, 0]) }));
+			expect(stays?.surprised).toBe(false);
+		});
+
+		it('breaks unconditionally at the end of the ramp (anti-orbit guarantee)', () => {
+			const pool = [...neutralPool(FEED.topK), ...hookyTail(FEED.surpriseMinPool + 1)];
+			const ctx = context({ runDepth: BREAK_DEPTH, rng: seq([0.999, 0]) });
 			const result = selectNext(pool, ctx);
 			expect(result?.surprised).toBe(true);
+			expect(result?.runReset).toBe(true);
 			expect(result?.candidate.title).toMatch(/^Lost article/);
 		});
 
-		it('falls back to normal pick when the hooky surprise pool is too shallow', () => {
-			const pool = [...neutralPool(FEED.topK), ...hookyTail(FEED.surpriseMinPool - 1)];
-			const ctx = context({ stepIndex: STEADY_STEP, rng: seq([0, 0]) });
-			const result = selectNext(pool, ctx);
-			expect(result?.surprised).toBe(false);
-		});
-
-		it('falls back to normal pick when the middle has no strong hooks', () => {
-			const pool = neutralPool(FEED.topK + FEED.surpriseMinPool + 1);
-			const ctx = context({ stepIndex: STEADY_STEP, rng: seq([0, 0]) });
-			const result = selectNext(pool, ctx);
-			expect(result?.surprised).toBe(false);
-		});
-
-		it('never surprises when noSurprise is true, even with rng forcing epsilon', () => {
+		it('breaks the session-first run at exactly runMinLength (guaranteed first tangent)', () => {
+			// runDepth === stepIndex means no boundary has occurred since the seed: the
+			// first run. It breaks with certainty so a first session reliably meets a
+			// tangent — the moment that shows what the product is.
 			const pool = [...neutralPool(FEED.topK), ...hookyTail(FEED.surpriseMinPool + 1)];
-			const ctx = context({ noSurprise: true, stepIndex: STEADY_STEP, rng: seq([0, 0]) });
+			const ctx = context({
+				runDepth: FEED.runMinLength,
+				stepIndex: FEED.runMinLength,
+				rng: seq([0.999, 0])
+			});
+			expect(selectNext(pool, ctx)?.surprised).toBe(true);
+		});
+
+		it('never breaks when noSurprise is true (branch/dive steering)', () => {
+			const pool = [...neutralPool(FEED.topK), ...hookyTail(FEED.surpriseMinPool + 1)];
+			const ctx = context({ noSurprise: true, runDepth: BREAK_DEPTH, rng: seq([0, 0]) });
 			const result = selectNext(pool, ctx);
 			expect(result?.surprised).toBe(false);
+			expect(result?.runReset).toBe(false);
 		});
 
-		describe('epsilon schedule', () => {
-			it('never fires on the first card, even with rng at zero', () => {
-				// The user is still orienting; yanking sideways on card one reads as broken.
-				const pool = [...neutralPool(FEED.topK), ...mildHookTail(FEED.surpriseMinPool + 1)];
-				const ctx = context({ stepIndex: 1, rng: seq([0, 0]) });
-				expect(selectNext(pool, ctx)?.surprised).toBe(false);
-			});
-
-			it('fires at the elevated early epsilon during the opening cards', () => {
-				// rng 0.3 is above the steady-state epsilon but below the early one, so
-				// this only fires while the opening schedule is in effect.
-				const pool = [...neutralPool(FEED.topK), ...mildHookTail(FEED.surpriseMinPool + 1)];
-				const ctx = context({ stepIndex: 2, rng: seq([0.3, 0]) });
+		describe('drift fall-through', () => {
+			it('still resets the run when the tangent pool is too shallow', () => {
+				const pool = [...neutralPool(FEED.topK), ...hookyTail(FEED.surpriseMinPool - 1)];
+				const ctx = context({ runDepth: BREAK_DEPTH, rng: seq([0, 0]) });
 				const result = selectNext(pool, ctx);
-				expect(result?.surprised).toBe(true);
-				expect(result?.candidate.title).toMatch(/^Curio/);
+				expect(result?.surprised).toBe(false);
+				expect(result?.runReset).toBe(true);
 			});
 
-			it('settles back to the steady-state epsilon after the opening cards', () => {
-				const pool = [...neutralPool(FEED.topK), ...mildHookTail(FEED.surpriseMinPool + 1)];
-				const ctx = context({ stepIndex: STEADY_STEP, rng: seq([0.3, 0]) });
-				expect(selectNext(pool, ctx)?.surprised).toBe(false);
+			it('still resets the run when the pool has no strong hooks', () => {
+				const pool = neutralPool(FEED.topK + FEED.surpriseMinPool + 1);
+				const ctx = context({ runDepth: BREAK_DEPTH, rng: seq([0, 0]) });
+				const result = selectNext(pool, ctx);
+				expect(result?.surprised).toBe(false);
+				expect(result?.runReset).toBe(true);
+			});
+
+			it('drifts out of the neighborhood: the run-overlapping candidate loses', () => {
+				// Hookless pool (no tangent can fire); variety must still steer the drift
+				// pick away from the run's tokens.
+				const ctx = context({
+					runDepth: BREAK_DEPTH,
+					runTokens: new Set(['neutral', 'topic']),
+					rng: seq([0, 0])
+				});
+				const pool = [
+					candidate({ title: 'Article A', description: 'neutral topic', thumbnail: null }),
+					candidate({ title: 'Article B', description: 'fresh subject', thumbnail: null })
+				];
+				const result = selectNext(pool, ctx);
+				expect(result?.candidate.title).toBe('Article B');
+				expect(result?.runReset).toBe(true);
 			});
 		});
 
-		it('does not let hookless high scorers crowd hooky candidates out of the surprise pool', () => {
-			// 8 top-K fillers, then 10 relevance-strong but hookless "mediums" whose
-			// surprise score outranks the hooky tail, then 4 genuinely hooky candidates.
-			// The mediums are ineligible (zero intrigue) — they must not consume the
-			// surprise pool's top-K slots and starve out the eligible hooky tail.
+		it('pushes the tangent landing out of the neighborhood via the variety penalty', () => {
+			// Two equally hooky tails; the one overlapping the run's tokens must lose.
+			const nearHooks = Array.from({ length: 3 }, (_, i) =>
+				candidate({
+					title: `Roman mystery ${i}`,
+					description: 'unsolved mystery of the roman empire',
+					thumbnail: null,
+					position: 100
+				})
+			);
+			const farHooks = Array.from({ length: 3 }, (_, i) =>
+				candidate({
+					title: `Ocean mystery ${i}`,
+					description: 'unsolved mystery of the deep sea',
+					thumbnail: null,
+					position: 100
+				})
+			);
+			const ctx = context({
+				runDepth: BREAK_DEPTH,
+				runTokens: new Set(['roman', 'empire', 'rome', 'unsolved', 'mystery']),
+				rng: seq([0, 0])
+			});
+			const result = selectNext([...neutralPool(FEED.topK), ...nearHooks, ...farHooks], ctx);
+			expect(result?.surprised).toBe(true);
+			expect(result?.candidate.title).toMatch(/^Ocean mystery/);
+		});
+
+		it('does not let hookless high scorers crowd hooky candidates out of the tangent pool', () => {
+			// Top-K fillers, then relevance-strong but hookless "mediums" whose break
+			// score outranks the hooky tail, then genuinely hooky candidates. The
+			// mediums are ineligible (zero intrigue) — they must not consume the
+			// tangent pool's capped slots and starve out the eligible hooky tail.
 			const ctx = context({
 				tokenWeights: { alpha: 3, beta: 3 },
-				stepIndex: 10,
+				runDepth: BREAK_DEPTH,
 				rng: seq([0, 0])
 			});
 			const fillers = Array.from({ length: FEED.topK }, (_, i) =>
@@ -418,9 +452,7 @@ describe('selectNext', () => {
 			expect(result?.candidate.title).toMatch(/^Curio/);
 		});
 
-		it('excludes political candidates from the surprise pool', () => {
-			// Build a large pool; mix in a political candidate near the bottom of scores.
-			// With rng always triggering surprise, it should never be the pick.
+		it('excludes political candidates from the tangent pool', () => {
 			const normalCandidates = [...neutralPool(FEED.topK), ...hookyTail(FEED.surpriseMinPool + 1)];
 			const political = candidate({
 				title: 'United States presidential election',
@@ -429,16 +461,24 @@ describe('selectNext', () => {
 				position: 100
 			});
 			const pool = [...normalCandidates, political];
-			// Run many selections with rng always firing surprise and picking the first entry.
-			// The political one ends up ranked last (heavily penalized); verify it never wins.
 			for (let i = 0; i < 20; i++) {
-				const ctx = context({ stepIndex: 10, rng: seq([0, 0]) });
+				const ctx = context({ runDepth: BREAK_DEPTH, rng: seq([0, 0]) });
 				const result = selectNext(pool, ctx);
 				if (result?.surprised) {
 					expect(result.candidate.title).not.toBe(political.title);
 				}
 			}
 		});
+	});
+});
+
+describe('runVariety', () => {
+	it('penalizes per unique shared token with the run', () => {
+		const ctx = context({ runTokens: new Set(['water', 'channel']) });
+		expect(runVariety(candidate(), ctx)).toBeCloseTo(2 * FEED.varietyPenalty, 5);
+		expect(
+			runVariety(candidate({ title: 'Volcano', description: 'erupting mountain' }), ctx)
+		).toBeCloseTo(0, 5);
 	});
 });
 

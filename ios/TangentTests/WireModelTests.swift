@@ -16,9 +16,11 @@ final class WireModelTests: XCTestCase {
 			),
 			session: SessionPayload(
 				seenTitles: ["Octopus"],
-				recentTokens: ["mollusc"],
 				noSurprise: false,
-				stepIndex: 1
+				stepIndex: 1,
+				runDepth: 1,
+				runTokens: ["mollusc", "octopus"],
+				runCategories: ["cephalopods"]
 			)
 		)
 
@@ -37,6 +39,9 @@ final class WireModelTests: XCTestCase {
 		)
 		XCTAssertEqual(session["stepIndex"] as? Int, 1)
 		XCTAssertEqual(session["noSurprise"] as? Bool, false)
+		XCTAssertEqual(session["runDepth"] as? Int, 1)
+		XCTAssertEqual(Set(try XCTUnwrap(session["runTokens"] as? [String])), ["mollusc", "octopus"])
+		XCTAssertEqual(session["runCategories"] as? [String], ["cephalopods"])
 	}
 
 	func testNextResponseDecodesExhaustedAndNullArticle() throws {
@@ -62,6 +67,22 @@ final class WireModelTests: XCTestCase {
 
 		XCTAssertEqual(res.article?.title, "Octopus")
 		XCTAssertNil(res.exhausted)
+		XCTAssertNil(res.runReset)
+		XCTAssertNil(res.categoryTokens)
 		XCTAssertEqual(res.relation, .surprise)
+	}
+
+	func testNextResponseDecodesRunFields() throws {
+		let data = Data("""
+		{"article":{"title":"Octopus","description":null,"extract":"x","thumbnail":null,
+		 "wikiUrl":"https://en.wikipedia.org/wiki/Octopus","lang":"en","tokens":["octopus"]},
+		 "surprised":true,"relation":"surprise","runReset":true,
+		 "categoryTokens":["cephalopods","molluscs"]}
+		""".utf8)
+
+		let res = try JSONDecoder().decode(NextResponse.self, from: data)
+
+		XCTAssertEqual(res.runReset, true)
+		XCTAssertEqual(res.categoryTokens, ["cephalopods", "molluscs"])
 	}
 }

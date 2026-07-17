@@ -3,6 +3,7 @@
 	import { Star, CirclePlus, LoaderCircle, ArrowRight } from '@lucide/svelte';
 	import { FEED } from '$lib/feed/config';
 	import { profile } from '$lib/engagement/profile.svelte';
+	import { feed } from '$lib/feed/feedState.svelte';
 	import { track } from '$lib/metrics';
 	import { actionHint } from '$lib/feed/hint.svelte';
 	import ConnectionBreadcrumb from './ConnectionBreadcrumb.svelte';
@@ -95,6 +96,9 @@
 		) {
 			profile.recordSkip(article);
 			track('skip', { title: article.title });
+			// A fast-skipped tangent is a dud jump: heal it so the next cards resume
+			// from the pre-tangent tip instead of growing a run from a rejected card.
+			if (card.connection.relation === 'surprise') feed.heal(card.id);
 		}
 	}
 

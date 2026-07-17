@@ -3,7 +3,7 @@ import type { EngineContext } from './types';
 import { FEED } from './config';
 import { isPolitical } from './politics';
 import { candidateText, intrigue, tasteAffinity } from './taste';
-import { tokenSet } from './tokens';
+import { categoryTokenSet, tokenSet } from './tokens';
 
 /** DF-discounted token weight — w / (1 + ln(1 + df)). Same form as TF-IDF's IDF. */
 export function dfWeight(weight: number, df: number): number {
@@ -99,8 +99,47 @@ export function specificity(candidate: Candidate): number {
 	return s;
 }
 
+/** Unique shared members between a candidate's token set and a run accumulation. */
+function sharedCount(tokens: Iterable<string>, run: Set<string>): number {
+	let shared = 0;
+	for (const t of tokens) if (run.has(t)) shared += 1;
+	return shared;
+}
+
 /**
- * Score a single candidate as the next step. Pure: same inputs -> same output.
+ * In-run lexical coherence: tanh-squashed count of tokens shared with the run so
+ * far. The inverse of the old always-on variety penalty — inside a run, sharing
+ * "roman" with the last three cards is the desired behavior, not monotony.
+ */
+export function coherence(candidate: Candidate, ctx: EngineContext): number {
+	const tokens = tokenSet(`${candidate.title} ${candidate.description ?? ''}`);
+	return Math.tanh(sharedCount(tokens, ctx.runTokens) / 2);
+}
+
+/**
+ * In-run era/region affinity: tanh-squashed count of normalized category tokens
+ * shared with the run so far. Categories carry the same-time-same-place signal
+ * ("Ancient Rome", "1st-century BC establishments") that title+description
+ * tokens mostly don't.
+ */
+export function categoryAffinity(candidate: Candidate, ctx: EngineContext): number {
+	return Math.tanh(sharedCount(categoryTokenSet(candidate.categories), ctx.runCategories) / 2);
+}
+
+/**
+ * Break-step variety: per-token penalty for overlap with the whole run's tokens.
+ * Applied only when picking a tangent (or its drift fall-through) — it pushes the
+ * landing spot out of the neighborhood the run just covered.
+ */
+export function runVariety(candidate: Candidate, ctx: EngineContext): number {
+	const tokens = tokenSet(`${candidate.title} ${candidate.description ?? ''}`);
+	return sharedCount(tokens, ctx.runTokens) * FEED.varietyPenalty;
+}
+
+/**
+ * Score a single candidate as the next step, phase-free: the run-phase terms
+ * (coherence/categoryAffinity in-run, runVariety at a break) are composed on top
+ * by selectNext, which owns the break decision. Pure: same inputs -> same output.
  *
  * Returns -Infinity for candidates we must never pick (already seen, disambiguation),
  * so callers can filter them out uniformly.
@@ -111,19 +150,17 @@ export function scoreCandidate(candidate: Candidate, ctx: EngineContext): number
 
 	// Unique tokens: the profile accumulates weights and doc frequency over unique
 	// tokens per article, so scoring counts each token once too — a title token
-	// repeated in the description must not double its relevance or variety hit.
+	// repeated in the description must not double its relevance.
 	const tokens = tokenSet(`${candidate.title} ${candidate.description ?? ''}`);
 
 	let relevance = 0;
 	let avoidance = 0;
-	let overlap = 0;
 	for (const token of tokens) {
 		const weight = ctx.tokenWeights[token] ?? 0;
 		const avoidWeight = ctx.tokenAvoidWeights[token] ?? 0;
 		const df = ctx.tokenDocFreq[token] ?? 0;
 		relevance += dfWeight(weight, df);
 		avoidance += dfWeight(avoidWeight, df);
-		if (ctx.recentTokens.has(token)) overlap += 1;
 	}
 
 	let score = FEED.base;
@@ -131,7 +168,6 @@ export function scoreCandidate(candidate: Candidate, ctx: EngineContext): number
 	// so moderate interest doesn't immediately dominate the score.
 	score += FEED.relevanceWeight * Math.tanh(relevance / 2);
 	score -= FEED.avoidanceWeight * Math.tanh(avoidance / 2);
-	score += overlap * FEED.varietyPenalty;
 	if (candidate.thumbnail) score += FEED.imageBonus;
 	if (candidate.relation === 'related') score += FEED.relatedPenalty;
 	score += FEED.tasteWeight * tasteAffinity(candidate, ctx.taste);
@@ -166,7 +202,9 @@ const NEUTRAL_CONTEXT: EngineContext = {
 	tokenAvoidWeights: {},
 	tokenDocFreq: {},
 	taste: 'balanced',
-	recentTokens: new Set(),
+	runDepth: 0,
+	runTokens: new Set(),
+	runCategories: new Set(),
 	seenTitles: new Set(),
 	noSurprise: true,
 	stepIndex: 0,

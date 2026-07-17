@@ -22,3 +22,24 @@ export function tokenize(text: string | null | undefined): string[] {
 export function tokenSet(text: string | null | undefined): Set<string> {
 	return new Set(tokenize(text));
 }
+
+/**
+ * Normalized tokens of category names, the raw material of the run-coherence
+ * signal. Unlike {@link tokenize}, digit-bearing tokens are kept — the era and
+ * region information categories carry is digit-laden ("1st-century BC births",
+ * "States and territories established in 27 BC"), and dropping it would blind
+ * the signal to exactly the same-time-same-place overlap it exists to detect.
+ */
+export function categoryTokenSet(categories: readonly string[] | null | undefined): Set<string> {
+	const out = new Set<string>();
+	for (const cat of categories ?? []) {
+		const name = cat.replace(/^Category:/, '').toLowerCase();
+		for (const m of name.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) ?? []) {
+			if (STOPWORDS.has(m)) continue;
+			// bc/ad are kept despite the length rule — without them "27 BC" and
+			// "27 AD" collapse into the same era.
+			if (m.length >= 3 || /\d/.test(m) || m === 'bc' || m === 'ad') out.add(m);
+		}
+	}
+	return out;
+}

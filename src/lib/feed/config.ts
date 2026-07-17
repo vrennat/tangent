@@ -2,8 +2,12 @@
  * Tunable knobs for the feed algorithm. Everything that shapes the rabbit hole
  * lives here so the behavior is easy to reason about and iterate on.
  *
- * Keep it simple (per design): position-free scoring over a candidate pool,
- * an engagement nudge, a variety penalty, and a surprise epsilon for serendipity.
+ * Shape of the walk (docs/specs/2026-07-16-run-based-feed-design.md): the feed
+ * moves in RUNS — a few cards that stay in the current neighborhood (coherence +
+ * category-affinity bonuses) — punctuated by TANGENTS, deliberate quality-gated
+ * jumps that start the next run. The jump-distance sim showed the previous
+ * per-card walk was unimodal (a routine pick and a deliberate surprise were the
+ * same felt size); runs/breaks make it bimodal on purpose.
  */
 export const FEED = {
 	/** Baseline score every candidate starts with. */
@@ -53,8 +57,41 @@ export const FEED = {
 	positionWeight: 2.4,
 	/** Decay constant for the position boost (links ~this far in get ~37% of it). */
 	positionHalfLife: 10,
-	/** Per-token penalty for overlapping with recently shown articles (variety). */
+	/**
+	 * Per-token penalty for overlapping with the current run's tokens, applied ONLY
+	 * at a run break — it pushes the tangent pool out of the neighborhood the run
+	 * just spent 3-5 cards in. In-run it is off entirely: the sim diagnosis showed
+	 * the old always-on version penalized exactly the on-topic continuation
+	 * ("Roman Republic" after "Roman Empire") that runs exist to provide.
+	 */
 	varietyPenalty: -0.45,
+	/**
+	 * In-run bonus for sharing tokens with the run so far (tanh-squashed count).
+	 * The lexical half of "stay in the neighborhood"; sized between the intrigue
+	 * nudge and the taste boost so it shapes ties without overriding relevance.
+	 * Sim-tuned starting prior — see the spec's acceptance criteria.
+	 */
+	coherenceWeight: 0.9,
+	/**
+	 * In-run bonus for sharing normalized category tokens with the run so far
+	 * (tanh-squashed count). This is the era/region signal: Wikipedia categories
+	 * encode exactly same-time-same-place ("Ancient Rome", "1st-century BC
+	 * establishments"), which title+description tokens mostly don't. Weighted
+	 * above coherence because category overlap is rarer and more meaningful —
+	 * requires the complete-categories fetch (see wikipedia/action.ts).
+	 */
+	categoryAffinityWeight: 1.6,
+	/** Cards a run must serve before a break can roll. Runs are 3-5 cards. */
+	runMinLength: 3,
+	/**
+	 * Break probability by cards past runMinLength: 45% at depth 3, 75% at 4,
+	 * certain at 5. The final 1 is the anti-orbit guarantee — coherence bonuses
+	 * strengthen gravity wells, so run termination must not be probabilistic
+	 * forever. The session's FIRST run breaks at exactly runMinLength instead
+	 * (probability 1), so a first session reliably meets a tangent at card 4 —
+	 * the moment that shows what the product is — rather than 45%-maybe.
+	 */
+	runBreakRamp: [0.45, 0.75, 1] as const,
 	/** Nudge against `related` fallbacks so genuine outbound links win ties. */
 	relatedPenalty: -0.25,
 	/** Safety net — disambiguation pages should already be filtered out. */
@@ -65,26 +102,10 @@ export const FEED = {
 	 * (not -Infinity), so they can still appear when nothing else is available.
 	 */
 	politicalPenalty: -500,
-	/** Steady-state probability of ignoring relevance and jumping somewhere loosely
-	 *  connected. The opening cards use surpriseEpsilonSchedule instead. */
-	surpriseEpsilon: 0.18,
-	/**
-	 * Per-step surprise epsilon for the opening cards (index = stepIndex; beyond the
-	 * array the steady-state surpriseEpsilon applies). Zero on the first card — the
-	 * user is still orienting, and a sideways yank there reads as broken — then
-	 * elevated through the first handful so a first session reliably meets a tangent,
-	 * the moment that shows what the product is, instead of waiting the ~6 cards the
-	 * steady-state epsilon needs in expectation. The pool-quality gates (floor,
-	 * intrigue floor, minPool fall-through) still apply, so a shallow middle never
-	 * turns the elevated epsilon into dud surprises.
-	 */
-	surpriseEpsilonSchedule: [0, 0, 0.35, 0.35, 0.35, 0.35, 0.35] as const,
 	/** Pick the next step by weighted-random among the top-K scorers (not pure argmax). */
 	topK: 8,
 	/** Softmax temperature for that weighted pick. Higher = more random among the top. */
 	temperature: 0.6,
-	/** How many recent articles feed the variety penalty (widened so the immediate parent is excluded separately). */
-	recentWindow: 5,
 	/** Weight added to a token each time the user likes an article containing it. */
 	likeTokenWeight: 1,
 	/** Weight added when the user explicitly clicks through to read an article — stronger than passive dwell. */
@@ -122,43 +143,23 @@ export const FEED = {
 	tokenWeightCap: 3,
 	/** Single avoided-token ceiling; keeps skips from permanently burying broad topics. */
 	avoidTokenWeightCap: 1.8,
-	/** Five-card pacing loop: continuity, continuity, taste, novelty, specificity. */
-	pacingPattern: ['close', 'close', 'taste', 'intrigue', 'specific'] as const,
-	/**
-	 * Cold-open pacing for the opening steps (index = stepIndex; index 0 aligns with
-	 * the seed, so clients that build from step 1 never hit it). At step 1 every
-	 * candidate is one hop from the seed — closeness is guaranteed by construction —
-	 * so the regular loop's close/close/taste start wastes the first impression on
-	 * continuity the pool already provides. Open on hooks instead; the regular loop
-	 * restarts from its beginning once these run out.
-	 */
-	pacingColdOpen: ['close', 'intrigue', 'specific', 'close', 'intrigue'] as const,
-	/**
-	 * Slot substituted for 'taste' when the user hasn't picked a flavor: tasteAffinity
-	 * is identically 0 for 'balanced', so the taste slot would otherwise be a dead
-	 * spot in the loop for every user on the default — which is every cold-start user.
-	 */
-	pacingBalancedFallback: 'intrigue' as const,
-	/** Extra boost for the explicit taste slot. */
-	pacingTasteBoost: 1.25,
-	/** Extra boost for the novelty/hook slot. */
-	pacingIntrigueBoost: 1.5,
-	/** Extra boost for the vivid-specific story slot. */
-	pacingSpecificityBoost: 1.1,
-	/** Minimum score for a candidate to qualify for the surprise pool (excludes garbage at the bottom). */
+	/** Minimum break-step score for a candidate to qualify for the tangent pool
+	 *  (excludes garbage at the bottom; near-neighborhood candidates sink below it
+	 *  via the break-step variety penalty, which is the point). */
 	surpriseFloor: 0.1,
-	/** Minimum hook score for a smart surprise. */
+	/** Minimum hook score for a tangent — a run break must land somewhere with a story. */
 	surpriseIntrigueFloor: 0.35,
-	/** Extra surprise-time weight for hooky lateral candidates. */
+	/** Extra tangent-time weight for hooky lateral candidates. */
 	surpriseIntrigueBoost: 1.8,
-	/** Surprise softmax temperature; higher than normal because surprise should vary. */
+	/** Tangent softmax temperature; higher than normal because tangents should vary. */
 	surpriseTemperature: 0.85,
-	/** Cap smart-surprise candidates after sorting by surprise score. */
+	/** Cap tangent candidates after sorting by tangent score. */
 	surpriseTopK: 10,
 	/**
-	 * Minimum usable mid-tier candidates (below top-K) for a surprise to fire.
-	 * Equivalent to requiring a total scored pool of roughly topK + this many —
-	 * a dud surprise from a near-empty middle is worse than no surprise.
+	 * Minimum eligible tangent candidates for the jump to fire. Below this the
+	 * break falls through to a drift pick — out-of-neighborhood by variety penalty,
+	 * but no jump — and the run resets anyway so a thin pool can never trap the
+	 * feed in an orbit. A dud tangent from a near-empty pool is worse than none.
 	 */
 	surpriseMinPool: 3,
 	/** sessionStorage key used to persist the trail (titles + relations only — tiny). */

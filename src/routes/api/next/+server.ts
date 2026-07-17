@@ -4,6 +4,7 @@ import type { NextRequest, NextResponse, Relation } from '$lib/feed/types';
 import { fetchExploreCandidates, fetchRelated } from '$lib/wikipedia/action';
 import { selectNext } from '$lib/feed/select';
 import { buildEngineContext } from '$lib/feed/context';
+import { categoryTokenSet } from '$lib/feed/tokens';
 import { resolveCard } from '$lib/server/resolveCard';
 import { cached, TTL } from '$lib/server/cache';
 
@@ -35,7 +36,7 @@ export const POST: RequestHandler = async ({ request, setHeaders }) => {
 	if (!from) return json({ article: null, error: 'missing fromTitle' }, { status: 400 });
 
 	const interest = body.interest ?? { tokenWeights: {}, tokenDocFreq: {} };
-	const session = body.session ?? { seenTitles: [], recentTokens: [] };
+	const session = body.session ?? { seenTitles: [] };
 	const related = body.mode === 'related';
 	const key = `links:${related ? 'related' : 'explore'}:${from}`;
 
@@ -71,7 +72,13 @@ export const POST: RequestHandler = async ({ request, setHeaders }) => {
 
 		if (resolved.article) {
 			const relation: Relation = selection.surprised ? 'surprise' : selection.candidate.relation;
-			return json({ article: resolved.article, surprised: selection.surprised, relation } satisfies NextResponse);
+			return json({
+				article: resolved.article,
+				surprised: selection.surprised,
+				relation,
+				runReset: selection.runReset,
+				categoryTokens: [...categoryTokenSet(selection.candidate.categories)]
+			} satisfies NextResponse);
 		}
 		blocked.add(selection.candidate.title);
 	}

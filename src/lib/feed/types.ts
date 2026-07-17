@@ -8,6 +8,8 @@ export interface Connection {
 	/** The title of the article we came from (empty for the seed). */
 	fromTitle: string;
 	relation: Relation;
+	/** True when this card started a new run (seed, tangent, drift, branch, dive). */
+	runStart?: boolean;
 }
 
 /** One entry in the feed. `id` is unique per appearance so keys stay stable. */
@@ -15,6 +17,10 @@ export interface FeedCard {
 	id: string;
 	article: Article;
 	connection: Connection;
+	/** Wikipedia categories carried over from the candidate that won selection —
+	 *  feeds the run's category accumulation. Absent for seeds/dives/rehydrated
+	 *  cards (fetched as bare articles), which simply contribute no category signal. */
+	categories?: string[];
 	/**
 	 * True while an optimistic placeholder is still loading its real article. A dive
 	 * appends the card and scrolls to it immediately (we already know the title), then
@@ -24,14 +30,22 @@ export interface FeedCard {
 	pending?: boolean;
 }
 
-/** One node in the persistent trail. Detours (surprises) are skipped when deriving the chain tip. */
+/** One node in the persistent trail. Healed detours are skipped when deriving the chain tip. */
 export interface TrailNode {
 	id: string;
 	title: string;
 	relation: Relation;
 	fromTitle: string;
-	/** True for surprise cards — the next build fetches from the pre-surprise tip instead. */
+	/**
+	 * True for a tangent the user healed (fast-skipped): the chain tip and run
+	 * accounting skip it, so the feed rebuilds from the pre-tangent card. Tangents
+	 * re-root by default; this flag is the escape hatch, set after the fact.
+	 * (Old stored trails marked every surprise a detour at creation — still honored.)
+	 */
 	isDetour: boolean;
+	/** True when this node started a new run. Old stored trails lack it; run
+	 *  accounting falls back to boundary relations (seed/related/surprise/dive). */
+	runStart?: boolean;
 	/**
 	 * True once the card has actually scrolled into view (or is the seed). The full chain
 	 * is kept for mechanics/rehydration, but the user-facing trail only shows seen nodes —
@@ -62,13 +76,19 @@ export interface EngineContext {
 	tokenDocFreq: Record<string, number>;
 	/** Explicit user steering: a soft boost, not a hard filter. */
 	taste: TasteId;
-	/** Tokens from the last few shown articles, to penalize monotony (variety). */
-	recentTokens: Set<string>;
+	/** Cards served since the current run began (0 = picking a fresh run's first card). */
+	runDepth: number;
+	/** Tokens accumulated from the current run's cards — the coherence target in-run,
+	 *  the variety target at a run break. */
+	runTokens: Set<string>;
+	/** Normalized category tokens accumulated from the current run's cards — the
+	 *  era/region half of the coherence signal. */
+	runCategories: Set<string>;
 	/** Titles already shown, to avoid loops. */
 	seenTitles: Set<string>;
-	/** When true, the engine never fires a surprise (branchFrom, dives). */
+	/** When true, the engine never breaks the run for a tangent (branchFrom, dives). */
 	noSurprise: boolean;
-	/** Approximate chain position used for pacing slots. */
+	/** Cards served this session — identifies the first run (runDepth === stepIndex). */
 	stepIndex: number;
 	/** Injectable RNG (default Math.random) so tests are deterministic. */
 	rng: () => number;
@@ -76,8 +96,12 @@ export interface EngineContext {
 
 export interface Selection {
 	candidate: Candidate;
-	/** True when the surprise epsilon fired and relevance was bypassed. */
+	/** True when this pick is a tangent — a deliberate run-breaking jump. */
 	surprised: boolean;
+	/** True when this pick starts a new run (every tangent, plus the drift
+	 *  fall-through when the tangent pool was too shallow). Clients reset their
+	 *  run accounting (depth, run tokens/categories) on it. */
+	runReset: boolean;
 }
 
 /**
@@ -101,12 +125,20 @@ export interface InterestPayload {
 export interface SessionPayload {
 	/** Titles already shown this session, to avoid loops. */
 	seenTitles: string[];
-	/** Tokens from the last few shown articles, for the variety penalty. */
-	recentTokens: string[];
-	/** When true, the engine never fires a surprise (deliberate steering: branch/dive). */
+	/** Deprecated: superseded by runTokens. Still read as a fallback so older
+	 *  clients keep a coherence signal. */
+	recentTokens?: string[];
+	/** When true, the engine never breaks the run for a tangent (branch/dive). */
 	noSurprise?: boolean;
-	/** Approximate chain position for pacing. Defaults to seenTitles.length. */
+	/** Cards served this session. Defaults to seenTitles.length. */
 	stepIndex?: number;
+	/** Cards served since the current run began. Older clients omit it; the server
+	 *  falls back to a fixed-cadence cycle derived from stepIndex. */
+	runDepth?: number;
+	/** Tokens accumulated from the current run's cards. */
+	runTokens?: string[];
+	/** Normalized category tokens accumulated from the current run's cards. */
+	runCategories?: string[];
 }
 
 /** POST body for `/api/next` — the server reconstructs an {@link EngineContext} from this. */
@@ -124,6 +156,12 @@ export interface NextResponse {
 	article: Article | null;
 	surprised: boolean;
 	relation: Relation;
+	/** True when this pick starts a new run — clients reset run accounting on it. */
+	runReset?: boolean;
+	/** The picked candidate's NORMALIZED category tokens (categoryTokenSet), ready
+	 *  for the client's run-category accumulation. Pre-normalized server-side so
+	 *  native clients never need their own category tokenizer. */
+	categoryTokens?: string[];
 	/** True when the candidate pool is exhausted (no eligible next step). */
 	exhausted?: boolean;
 }

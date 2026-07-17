@@ -1,11 +1,11 @@
 import { browser } from '$app/environment';
 import type { Article, Candidate } from '$lib/wikipedia/types';
 import type { Connection, EngineContext, FeedCard, FetchResult, Relation, TrailNode } from './types';
-import { FEED } from './config';
 import { selectNext } from './select';
-import { tokenize } from './tokens';
+import { categoryTokenSet, tokenize } from './tokens';
 import { profile } from '$lib/engagement/profile.svelte';
 import { saveTrail, loadTrail, clearTrail, chainTip } from './trail';
+import { FEED } from './config';
 
 type Status = 'idle' | 'loading' | 'ready' | 'error' | 'exhausted' | 'stalled';
 
@@ -107,7 +107,7 @@ class FeedState {
 		}
 
 		this.displayTitle = result.data.title;
-		const seedCard = this.#card(result.data, { fromTitle: '', relation: 'seed' });
+		const seedCard = this.#card(result.data, { fromTitle: '', relation: 'seed', runStart: true });
 		this.cards = [seedCard];
 		// The seed is where you start, so it's seen from the outset.
 		this.trail = [this.#trailNode(seedCard, true)];
@@ -142,7 +142,7 @@ class FeedState {
 			const linksResult = await fetchLinksApi(card.article.title, 'related');
 			if (!linksResult.ok) return null;
 
-			// branchFrom is a deliberate steering action — never surprise here.
+			// branchFrom is a deliberate steering action — never tangent here.
 			const selection = selectNext(linksResult.data, this.#context({ noSurprise: true }));
 			if (!selection) return null;
 
@@ -150,10 +150,11 @@ class FeedState {
 			if (!cardResult.ok) return null;
 
 			this.#buffer = [];
-			const built = this.#card(cardResult.data, {
-				fromTitle: card.article.title,
-				relation: 'related'
-			});
+			const built = this.#card(
+				cardResult.data,
+				{ fromTitle: card.article.title, relation: 'related', runStart: true },
+				selection.candidate.categories
+			);
 			this.cards = [...this.cards, built];
 			this.trail = [...this.trail, this.#trailNode(built)];
 			if (browser) saveTrail(this.seedTitle ?? '', this.trail);
@@ -182,7 +183,7 @@ class FeedState {
 	beginDive(title: string, fromTitle: string): string {
 		// New buffered picks were built from the old tip; the dive changes the tip.
 		this.#buffer = [];
-		const placeholder = this.#pendingCard(title, { fromTitle, relation: 'dive' });
+		const placeholder = this.#pendingCard(title, { fromTitle, relation: 'dive', runStart: true });
 		this.cards = [...this.cards, placeholder];
 		this.trail = [...this.trail, this.#trailNode(placeholder)];
 		if (browser) saveTrail(this.seedTitle ?? '', this.trail);
@@ -304,7 +305,11 @@ class FeedState {
 		const cardResult = await fetchCardApi(selection.candidate.title);
 		if (!cardResult.ok) return null;
 
-		const built = this.#card(cardResult.data, { fromTitle: tip.title, relation: 'related' });
+		const built = this.#card(
+			cardResult.data,
+			{ fromTitle: tip.title, relation: 'related', runStart: true },
+			selection.candidate.categories
+		);
 		this.cards = [...this.cards, built];
 		this.trail = [...this.trail, this.#trailNode(built)];
 		if (browser) saveTrail(this.seedTitle ?? '', this.trail);
@@ -360,10 +365,9 @@ class FeedState {
 	}
 
 	async #doBuild(): Promise<boolean> {
-		// The effective tip skips surprise detours so a dud jump self-heals:
-		// the next card after a surprise fetches from the pre-surprise chain tip.
-		// Consecutive surprises share the same pre-surprise tip (intentional — the
-		// user can adopt a detour via "More like this" if they want it as the new root).
+		// The effective tip skips HEALED tangents: a tangent re-roots the feed by
+		// default, and a fast skip on it flips its trail node to isDetour so the
+		// next build resumes from the pre-tangent card instead.
 		const tip = this.#effectiveTip();
 		if (!tip) return false;
 
@@ -381,12 +385,18 @@ class FeedState {
 			const cardResult = await fetchCardApi(selection.candidate.title);
 			if (cardResult.ok) {
 				const relation: Relation = selection.surprised ? 'surprise' : selection.candidate.relation;
-				// Surprise: breadcrumb says "Tangent from <actual previous card>", not the tip.
+				// Tangent: breadcrumb says "Tangent from <actual previous card>", not the tip.
 				const rawTip = this.#buffer.at(-1) ?? this.cards.at(-1);
 				const fromTitle = selection.surprised
 					? (rawTip?.article.title ?? tip.article.title)
 					: tip.article.title;
-				this.#buffer.push(this.#card(cardResult.data, { fromTitle, relation }));
+				this.#buffer.push(
+					this.#card(
+						cardResult.data,
+						{ fromTitle, relation, runStart: selection.runReset },
+						selection.candidate.categories
+					)
+				);
 				return true;
 			}
 			if (cardResult.kind === 'network') {
@@ -398,17 +408,72 @@ class FeedState {
 		return false;
 	}
 
+	/** Ids of healed tangents — excluded from the chain tip and run accounting. */
+	#healedIds(): Set<string> {
+		return new Set(this.trail.filter((n) => n.isDetour).map((n) => n.id));
+	}
+
 	/**
-	 * The last non-detour card in cards+buffer.
-	 * Surprise cards are detours; the chain continues from before them so a dud jump self-heals.
-	 * Falls back to the last card if everything in view is a detour (pathological case).
+	 * The last non-healed card in cards+buffer. Tangents re-root by default; only
+	 * a healed one (fast-skipped) is bypassed, so the chain resumes from before it.
+	 * Falls back to the last card if everything in view is healed (pathological case).
 	 */
 	#effectiveTip(): FeedCard | null {
 		const all = [...this.cards, ...this.#buffer];
+		const healed = this.#healedIds();
 		for (let i = all.length - 1; i >= 0; i--) {
-			if (all[i].connection.relation !== 'surprise') return all[i];
+			if (!healed.has(all[i].id)) return all[i];
 		}
 		return all.at(-1) ?? null;
+	}
+
+	/**
+	 * Heal a dud tangent: the user skipped straight past it, so instead of growing
+	 * the new run from a card they rejected, mark it a detour and rebuild from the
+	 * pre-tangent tip. Only the current tail card can heal — once the reader has
+	 * moved on to its successors, they have adopted the direction and yanking the
+	 * chain back out from under them would be worse than the dud.
+	 */
+	heal(cardId: string): void {
+		const node = this.trail.find((n) => n.id === cardId);
+		if (!node || node.relation !== 'surprise' || node.isDetour) return;
+		if (this.cards.at(-1)?.id !== cardId) return;
+
+		this.trail = this.trail.map((n) => (n.id === cardId ? { ...n, isDetour: true } : n));
+		if (browser) saveTrail(this.seedTitle ?? '', this.trail);
+		// Buffered successors were built from the healed tangent — rebuild.
+		this.#buffer = [];
+		if (this.status === 'ready') void this.#refill();
+	}
+
+	/**
+	 * Run accounting, derived from the chain (healed tangents excluded): the
+	 * current run starts at the last runStart card — falling back to boundary
+	 * relations for trails stored before the flag existed — and accumulates
+	 * tokens (title+description) and category tokens from there to the tip.
+	 */
+	#runState(chain: FeedCard[]): Pick<EngineContext, 'runDepth' | 'runTokens' | 'runCategories'> {
+		let start = 0;
+		for (let i = chain.length - 1; i >= 0; i--) {
+			const { relation, runStart } = chain[i].connection;
+			// The relation fallback is only for cards rehydrated from trails stored
+			// before the flag existed — a live in-run pick can legitimately carry
+			// relation 'related' (morelike top-up candidates) with runStart false.
+			if (runStart ?? relation !== 'link') {
+				start = i;
+				break;
+			}
+		}
+
+		const runTokens = new Set<string>();
+		const runCategories = new Set<string>();
+		for (const card of chain.slice(start)) {
+			for (const t of tokenize(`${card.article.title} ${card.article.description ?? ''}`)) {
+				runTokens.add(t);
+			}
+			for (const t of categoryTokenSet(card.categories)) runCategories.add(t);
+		}
+		return { runDepth: chain.length - start, runTokens, runCategories };
 	}
 
 	/** Assemble the engine context from the current chain + engagement profile. */
@@ -417,22 +482,15 @@ class FeedState {
 		const seenTitles = new Set(all.map((c) => c.article.title));
 		if (opts.blocked) for (const t of opts.blocked) seenTitles.add(t);
 
-		// Exclude the immediate parent (last card) from recentTokens so candidates aren't
-		// penalized for sharing tokens with the article that links them. The window still
-		// catches repetition loops — just one level further back.
-		const recentTokens = new Set<string>();
-		for (const card of all.slice(-(FEED.recentWindow + 1), -1)) {
-			for (const token of tokenize(`${card.article.title} ${card.article.description ?? ''}`)) {
-				recentTokens.add(token);
-			}
-		}
+		const healed = this.#healedIds();
+		const chain = all.filter((c) => !healed.has(c.id));
 
 		return {
 			tokenWeights: profile.tokenWeights,
 			tokenAvoidWeights: profile.tokenAvoidWeights,
 			tokenDocFreq: profile.tokenDocFreq,
 			taste: profile.taste,
-			recentTokens,
+			...this.#runState(chain),
 			seenTitles,
 			noSurprise: opts.noSurprise ?? false,
 			stepIndex: all.length,
@@ -440,8 +498,8 @@ class FeedState {
 		};
 	}
 
-	#card(article: Article, connection: Connection): FeedCard {
-		return { id: `${article.title}#${this.#counter++}`, article, connection };
+	#card(article: Article, connection: Connection, categories?: string[]): FeedCard {
+		return { id: `${article.title}#${this.#counter++}`, article, connection, categories };
 	}
 
 	/**
@@ -466,7 +524,7 @@ class FeedState {
 		return {
 			id: node.id,
 			article,
-			connection: { fromTitle: node.fromTitle, relation: node.relation }
+			connection: { fromTitle: node.fromTitle, relation: node.relation, runStart: node.runStart }
 		};
 	}
 
@@ -476,8 +534,10 @@ class FeedState {
 			title: card.article.title,
 			relation: card.connection.relation,
 			fromTitle: card.connection.fromTitle,
-			// Surprises are detours: the next build fetches from the pre-surprise tip.
-			isDetour: card.connection.relation === 'surprise',
+			// Tangents re-root by default; isDetour is only set after the fact by
+			// heal() when the user fast-skips one.
+			isDetour: false,
+			runStart: card.connection.runStart,
 			seen
 		};
 	}

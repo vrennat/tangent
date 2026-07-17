@@ -1,11 +1,10 @@
 import type { Candidate } from '$lib/wikipedia/types';
 import type { EngineContext, Selection } from './types';
 import { FEED } from './config';
-import { scoreCandidate, specificity } from './score';
+import { categoryAffinity, coherence, runVariety, scoreCandidate } from './score';
 import { isPolitical } from './politics';
-import { candidateText, intrigue, tasteAffinity } from './taste';
+import { candidateText, intrigue } from './taste';
 
-type PaceSlot = (typeof FEED.pacingPattern)[number];
 type Scored = { candidate: Candidate; score: number };
 type Ranked = Scored & { selectionScore: number };
 
@@ -29,67 +28,51 @@ function weightedIndex(weights: number[], rng: () => number): number {
 function pickWeighted(
 	ranked: Ranked[],
 	rng: () => number,
-	temperature: number = FEED.temperature,
-	surprised = false
-): Selection {
+	temperature: number = FEED.temperature
+): Candidate {
 	const top = ranked[0].selectionScore;
 	const weights = ranked.map((s) => Math.exp((s.selectionScore - top) / temperature));
-	const idx = weightedIndex(weights, rng);
-	return { candidate: ranked[idx].candidate, surprised };
-}
-
-function paceSlot(ctx: EngineContext): PaceSlot {
-	const slot =
-		ctx.stepIndex < FEED.pacingColdOpen.length
-			? FEED.pacingColdOpen[ctx.stepIndex]
-			: FEED.pacingPattern[
-					(ctx.stepIndex - FEED.pacingColdOpen.length) % FEED.pacingPattern.length
-				];
-	// A balanced user has no flavor for the taste slot to boost — substitute so the
-	// slot isn't a no-op.
-	return slot === 'taste' && ctx.taste === 'balanced' ? FEED.pacingBalancedFallback : slot;
-}
-
-function pacedScore(scored: Scored, ctx: EngineContext, slot: PaceSlot): number {
-	switch (slot) {
-		case 'taste':
-			return scored.score + FEED.pacingTasteBoost * tasteAffinity(scored.candidate, ctx.taste);
-		case 'intrigue':
-			return scored.score + FEED.pacingIntrigueBoost * intrigue(scored.candidate);
-		case 'specific':
-			return scored.score + FEED.pacingSpecificityBoost * Math.max(0, specificity(scored.candidate));
-		case 'close':
-			return scored.score;
-	}
-}
-
-function rankedForSlot(scored: Scored[], ctx: EngineContext): Ranked[] {
-	const slot = paceSlot(ctx);
-	return scored
-		.map((s) => ({ ...s, selectionScore: pacedScore(s, ctx, slot) }))
-		.sort((a, b) => b.selectionScore - a.selectionScore);
+	return ranked[weightedIndex(weights, rng)].candidate;
 }
 
 /**
- * The surprise pool: mid-tier candidates with a strong hook, enough base quality,
+ * Probability that this pick breaks the run for a tangent.
+ *
+ * Zero until the run has served runMinLength cards, then the ramp — with 1 at the
+ * end as the anti-orbit guarantee (coherence bonuses strengthen gravity wells, so
+ * termination must not stay probabilistic forever). The session's FIRST run
+ * (runDepth === stepIndex: no boundary has occurred since the seed) breaks at
+ * exactly runMinLength, so a first session reliably meets a tangent at card 4 —
+ * the moment that shows what the product is.
+ */
+function breakProbability(ctx: EngineContext): number {
+	const past = ctx.runDepth - FEED.runMinLength;
+	if (past < 0) return 0;
+	if (ctx.runDepth === ctx.stepIndex) return 1;
+	return FEED.runBreakRamp[Math.min(past, FEED.runBreakRamp.length - 1)];
+}
+
+/**
+ * The tangent pool: candidates with a strong hook, enough base quality after the
+ * break-step variety penalty (which sinks the neighborhood the run just covered),
  * and low political risk, ranked by hook-boosted score and capped at surpriseTopK.
  *
  * Eligibility is filtered BEFORE the cap. Filtering after would let hookless
  * high scorers (strong relevance/position, zero intrigue) occupy the capped slots
  * and then be discarded — starving out eligible hooky candidates further down and
- * silently killing surprises the epsilon meant to fire.
+ * silently killing the tangent the break meant to fire.
  */
-function surpriseRanked(scored: Scored[], excludedTitles: Set<string>): Ranked[] {
-	return scored
-		.filter((s) => !excludedTitles.has(s.candidate.title) && s.score >= FEED.surpriseFloor)
-		.map((s) => ({ scored: s, hook: intrigue(s.candidate) }))
+function tangentRanked(breakScored: Ranked[]): Ranked[] {
+	return breakScored
+		.filter((s) => s.selectionScore >= FEED.surpriseFloor)
+		.map((s) => ({ s, hook: intrigue(s.candidate) }))
 		.filter(
-			({ scored: s, hook }) =>
+			({ s, hook }) =>
 				hook >= FEED.surpriseIntrigueFloor && !isPolitical(candidateText(s.candidate))
 		)
-		.map(({ scored: s, hook }) => ({
+		.map(({ s, hook }) => ({
 			...s,
-			selectionScore: s.score + FEED.surpriseIntrigueBoost * hook
+			selectionScore: s.selectionScore + FEED.surpriseIntrigueBoost * hook
 		}))
 		.sort((a, b) => b.selectionScore - a.selectionScore)
 		.slice(0, FEED.surpriseTopK);
@@ -98,13 +81,14 @@ function surpriseRanked(scored: Scored[], excludedTitles: Set<string>): Ranked[]
 /**
  * Choose the next article from a candidate pool.
  *
- * Two modes:
- *  - Surprise (probability `surpriseEpsilonSchedule[stepIndex]`, falling back to the
- *    steady-state `surpriseEpsilon`; never when `ctx.noSurprise`): pick from
- *    candidates outside the paced top-K that still have enough base score and a
- *    strong hook/intrigue signal. Falls through when that pool is too shallow.
- *  - Default: score everyone, apply the current pacing slot (close, taste,
- *    intrigue, specific), keep the top-K, then softmax-weighted-random among them.
+ * The feed moves in runs: while the run is young (runDepth < runMinLength, or the
+ * break roll misses), candidates sharing tokens/categories with the run so far get
+ * coherence bonuses — the pick stays in the neighborhood. Once the break ramp
+ * fires (never when ctx.noSurprise), the whole run's tokens become a variety
+ * penalty instead and the pick is a TANGENT from the hook-gated pool; if that
+ * pool is too shallow, the break falls through to a drift pick — best candidate
+ * outside the neighborhood, no jump — and the run resets either way, so a thin
+ * pool can never trap the feed in an orbit.
  *
  * Returns null only when nothing is eligible (true dead end).
  */
@@ -112,27 +96,53 @@ export function selectNext(candidates: Candidate[], ctx: EngineContext): Selecti
 	const pool = eligible(candidates, ctx);
 	if (pool.length === 0) return null;
 
-	// Selection order is owned by rankedForSlot / surpriseRanked; no pre-sort needed.
-	const scored = pool.map((candidate) => ({ candidate, score: scoreCandidate(candidate, ctx) }));
+	const scored: Scored[] = pool.map((candidate) => ({
+		candidate,
+		score: scoreCandidate(candidate, ctx)
+	}));
 
-	const ranked = rankedForSlot(scored, ctx);
-	const topKScored = ranked.slice(0, FEED.topK);
+	// One rng call per pick regardless of outcome, so call sequences (and therefore
+	// reproducibility in the sim) don't depend on the run phase.
+	const roll = ctx.rng();
+	const breaking = !ctx.noSurprise && roll < breakProbability(ctx);
 
-	const epsilon = FEED.surpriseEpsilonSchedule[ctx.stepIndex] ?? FEED.surpriseEpsilon;
-	if (!ctx.noSurprise && ctx.rng() < epsilon) {
-		// Smart surprise: look outside the normal top-K for candidates with a strong
-		// hook, enough base quality, and low political risk. Surprise should read as
-		// "wait, what?" rather than an unscored random page from the middle.
-		const excluded = new Set(topKScored.map((s) => s.candidate.title));
-		const surprisePool = surpriseRanked(scored, excluded);
+	if (breaking) {
+		const breakScored: Ranked[] = scored
+			.map((s) => ({ ...s, selectionScore: s.score + runVariety(s.candidate, ctx) }))
+			.sort((a, b) => b.selectionScore - a.selectionScore);
 
-		// If the pool is too shallow, fall through to normal picks — a dud surprise is worse than none.
-		if (surprisePool.length >= FEED.surpriseMinPool) {
-			return pickWeighted(surprisePool, ctx.rng, FEED.surpriseTemperature, true);
+		const tangentPool = tangentRanked(breakScored);
+		if (tangentPool.length >= FEED.surpriseMinPool) {
+			return {
+				candidate: pickWeighted(tangentPool, ctx.rng, FEED.surpriseTemperature),
+				surprised: true,
+				runReset: true
+			};
 		}
+
+		// Drift fall-through: no jump worth taking, but still leave the neighborhood
+		// (variety stays applied) and start a new run.
+		return {
+			candidate: pickWeighted(breakScored.slice(0, FEED.topK), ctx.rng),
+			surprised: false,
+			runReset: true
+		};
 	}
 
-	// Normal path: softmax over top-K.
-	if (topKScored.length === 0) return null;
-	return pickWeighted(topKScored, ctx.rng);
+	// In-run pick: coherence pulls toward the run's neighborhood.
+	const ranked: Ranked[] = scored
+		.map((s) => ({
+			...s,
+			selectionScore:
+				s.score +
+				FEED.coherenceWeight * coherence(s.candidate, ctx) +
+				FEED.categoryAffinityWeight * categoryAffinity(s.candidate, ctx)
+		}))
+		.sort((a, b) => b.selectionScore - a.selectionScore);
+
+	return {
+		candidate: pickWeighted(ranked.slice(0, FEED.topK), ctx.rng),
+		surprised: false,
+		runReset: false
+	};
 }
