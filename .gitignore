@@ -15,3 +15,4 @@ vite.config.ts.timestamp-*
 
 # design-ctx scan snapshot (local diffing only)
 .design-ctx.snapshot.json
+.playwright-mcp/
