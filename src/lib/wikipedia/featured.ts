@@ -30,6 +30,8 @@ interface FeedSummary {
 	normalizedtitle?: string;
 	titles?: { normalized?: string };
 	description?: string;
+	/** Plain-text lead paragraph — present on the tfa summary, used as the hero teaser. */
+	extract?: string;
 	thumbnail?: Thumbnail;
 }
 interface FeedNews {
@@ -148,7 +150,7 @@ function dykSubject(html: string): string | null {
 
 function featuredSection(tfa?: FeedSummary): TodaySection | null {
 	if (!tfa) return null;
-	const picks = rankSeeds([summaryToCandidate(tfa)]).map((c) => toPick(c));
+	const picks = rankSeeds([summaryToCandidate(tfa)]).map((c) => toPick(c, tfa.extract ?? null));
 	return picks.length ? { id: 'featured', label: "Today's featured article", picks } : null;
 }
 

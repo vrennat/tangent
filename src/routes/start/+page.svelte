@@ -1,49 +1,41 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import type { SearchResult } from '$lib/wikipedia/types';
-	import type { TodayFeed } from '$lib/wikipedia/featured';
-	import { SEEDS, randomSeed } from '$lib/seeds';
+	import type { PageProps } from './$types';
+	import { randomSeed } from '$lib/seeds';
 	import BrandMark from '$lib/components/BrandMark.svelte';
 	import RelationIcon from '$lib/components/RelationIcon.svelte';
 	import { Search } from '@lucide/svelte';
+
+	// `data.today` is a streamed promise: the shell paints immediately and the shelves
+	// fill in when Wikipedia's Main Page picks arrive (server-cached per UTC day).
+	let { data }: PageProps = $props();
 
 	let query = $state('');
 	let results = $state<SearchResult[]>([]);
 	let loading = $state(false);
 	let highlighted = $state(-1);
 
-	// Wikipedia's Main Page picks (featured / DYK / on this day / news / trending),
-	// fetched once on mount so the page paints instantly and the shelves fill in after.
-	let today = $state<TodayFeed | null>(null);
-	$effect(() => {
-		let ignore = false;
-		(async () => {
-			try {
-				const res = await fetch('/api/today');
-				const data = (await res.json()) as TodayFeed;
-				if (!ignore) today = data;
-			} catch {
-				if (!ignore) today = null;
-			}
-		})();
-		return () => {
-			ignore = true;
-		};
-	});
-
 	// The listbox popup is shown (and the combobox is "expanded") whenever there's
 	// a usable query — including the loading and no-match states, not just hits.
 	const showResults = $derived(query.trim().length >= 2);
 
+	// Cards and chips render as real links to this URL (middle-click, hover preload);
+	// enter() covers the imperative paths — search submit and "Surprise me".
+	function seedHref(title: string): string {
+		return `/?seed=${encodeURIComponent(title)}`;
+	}
+
 	function enter(title: string) {
-		goto(`/?seed=${encodeURIComponent(title)}`);
+		goto(seedHref(title));
 	}
 
 	// "Surprise me" favors today's fresh Main Page picks when they've loaded, so the day's
 	// interesting stuff pops up at the start of a tangent — falling back to the evergreen
 	// curated seeds otherwise (and some of the time regardless, to keep old favorites in play).
-	function surprise() {
-		const todayTitles = today?.sections.flatMap((s) => s.picks.map((p) => p.title)) ?? [];
+	async function surprise() {
+		const today = await data.today;
+		const todayTitles = today.sections.flatMap((s) => s.picks.map((p) => p.title));
 		if (todayTitles.length > 0 && Math.random() < 0.6) {
 			enter(todayTitles[Math.floor(Math.random() * todayTitles.length)]);
 		} else {
@@ -195,77 +187,130 @@
 		Surprise me
 	</button>
 
-	{#if today && today.sections.length > 0}
-		<section class="mt-14 w-full text-left">
+	{#await data.today}
+		<section class="mt-14 w-full text-left" aria-hidden="true">
 			<p class="text-xs font-medium tracking-widest text-faint uppercase">Today on Wikipedia</p>
 			<p class="mt-1 text-sm text-muted">Fresh from the front page — updated every day.</p>
 
 			<div class="mt-6 flex flex-col gap-8">
-				{#each today.sections as section (section.id)}
+				{#each ['first', 'second'] as row (row)}
 					<div>
-						<h2 class="mb-3 text-sm font-semibold text-ink">{section.label}</h2>
-						<!-- Horizontal shelf: clips + scrolls within the reading column so a long
-						     row never widens the page. -->
-						<div class="no-scrollbar -mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2">
-							{#each section.picks as pick (pick.title)}
-								<button
-									type="button"
-									onclick={() => enter(pick.title)}
-									class="group flex w-44 shrink-0 snap-start flex-col overflow-hidden rounded-2xl
-										border border-hair bg-surface/60 text-left transition-all
-										hover:border-accent/50 active:scale-[0.98]"
-								>
-									{#if pick.thumbnail}
-										<img
-											src={pick.thumbnail.source}
-											alt=""
-											loading="lazy"
-											class="h-24 w-full object-cover"
-										/>
-									{:else}
-										<div
-											class="flex h-24 w-full items-center justify-center bg-surface-2 text-2xl
-												text-faint"
-										>
-											{pick.title.slice(0, 1)}
-										</div>
-									{/if}
-									<div class="flex min-w-0 flex-1 flex-col gap-1 p-3">
-										{#if pick.year}
-											<span class="text-[11px] font-semibold tracking-wide text-accent"
-												>{pick.year}</span
-											>
-										{/if}
-										<span class="line-clamp-2 text-sm font-medium text-ink">{pick.title}</span>
-										{#if pick.hook}
-											<span class="line-clamp-2 text-xs leading-snug text-faint">{pick.hook}</span>
-										{:else if pick.description}
-											<span class="line-clamp-2 text-xs leading-snug text-faint"
-												>{pick.description}</span
-											>
-										{/if}
-									</div>
-								</button>
+						<div class="mb-3 h-4 w-28 animate-pulse rounded bg-surface-2"></div>
+						<div class="no-scrollbar shelf-fade -mx-1 flex gap-3 overflow-x-hidden px-1 pb-2">
+							{#each { length: 6 }, i (i)}
+								<div class="h-48 w-44 shrink-0 animate-pulse rounded-2xl bg-surface-2"></div>
 							{/each}
 						</div>
 					</div>
 				{/each}
 			</div>
 		</section>
-	{/if}
+	{:then today}
+		{#if today.sections.length > 0}
+			<section class="mt-14 w-full text-left">
+				<p class="text-xs font-medium tracking-widest text-faint uppercase">Today on Wikipedia</p>
+				<p class="mt-1 text-sm text-muted">Fresh from the front page — updated every day.</p>
+
+				<div class="mt-6 flex flex-col gap-8">
+					{#each today.sections as section (section.id)}
+						<div>
+							<h2 class="mb-3 text-sm font-semibold text-ink">{section.label}</h2>
+							{#if section.id === 'featured'}
+								<!-- Single pick, so it gets a full-width hero card instead of a
+								     one-card shelf. Stays mid-list — fetchToday deliberately keeps
+								     the often-topical featured article out of the lead slot. -->
+								{@const pick = section.picks[0]}
+								<a
+									href={seedHref(pick.title)}
+									class="flex flex-col overflow-hidden rounded-2xl border border-hair
+										bg-surface/60 text-left transition-all hover:border-accent/50
+										active:scale-[0.99] sm:flex-row"
+								>
+									{#if pick.thumbnail}
+										<img
+											src={pick.thumbnail.source}
+											alt=""
+											loading="lazy"
+											class="h-44 w-full object-cover sm:h-auto sm:w-52 sm:shrink-0"
+										/>
+									{/if}
+									<div class="flex min-w-0 flex-col gap-1.5 p-5">
+										<span class="font-display text-lg font-semibold text-ink">{pick.title}</span>
+										{#if pick.description}
+											<span class="text-xs text-faint">{pick.description}</span>
+										{/if}
+										{#if pick.hook}
+											<p class="mt-1 line-clamp-3 text-sm leading-relaxed text-muted">
+												{pick.hook}
+											</p>
+										{/if}
+									</div>
+								</a>
+							{:else}
+								<!-- Horizontal shelf: clips + scrolls within the reading column so a long
+								     row never widens the page. -->
+								<div class="no-scrollbar shelf-fade -mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2">
+									{#each section.picks as pick (pick.title)}
+										<a
+											href={seedHref(pick.title)}
+											class="flex w-44 shrink-0 snap-start flex-col overflow-hidden rounded-2xl
+												border border-hair bg-surface/60 text-left transition-all
+												hover:border-accent/50 active:scale-[0.98]"
+										>
+											{#if pick.thumbnail}
+												<img
+													src={pick.thumbnail.source}
+													alt=""
+													loading="lazy"
+													class="h-24 w-full object-cover"
+												/>
+											{:else}
+												<div
+													class="flex h-24 w-full items-center justify-center bg-surface-2 text-2xl
+														text-faint"
+												>
+													{pick.title.slice(0, 1)}
+												</div>
+											{/if}
+											<div class="flex min-w-0 flex-1 flex-col gap-1 p-3">
+												{#if pick.year}
+													<span class="text-[11px] font-semibold tracking-wide text-accent"
+														>{pick.year}</span
+													>
+												{/if}
+												<span class="line-clamp-2 text-sm font-medium text-ink">{pick.title}</span>
+												{#if pick.hook}
+													<span class="line-clamp-2 text-xs leading-snug text-faint"
+														>{pick.hook}</span
+													>
+												{:else if pick.description}
+													<span class="line-clamp-2 text-xs leading-snug text-faint"
+														>{pick.description}</span
+													>
+												{/if}
+											</div>
+										</a>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			</section>
+		{/if}
+	{/await}
 
 	<div class="mt-12 w-full">
 		<p class="mb-4 text-xs font-medium tracking-widest text-faint uppercase">Or dive into</p>
 		<div class="flex flex-wrap justify-center gap-2">
-			{#each SEEDS as seed (seed.title)}
-				<button
-					type="button"
-					onclick={() => enter(seed.title)}
+			{#each data.seeds as seed (seed.title)}
+				<a
+					href={seedHref(seed.title)}
 					class="rounded-full border border-hair bg-surface/60 px-3 py-1.5 text-sm
 						text-muted transition-all hover:border-accent/50 hover:text-ink active:scale-95"
 				>
 					{seed.title}
-				</button>
+				</a>
 			{/each}
 		</div>
 	</div>

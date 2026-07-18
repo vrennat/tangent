@@ -286,6 +286,57 @@ body::before {
 	display: none;
 }
 
+/* Fade the clipped edges of a horizontal shelf so overflow reads as "more", not a hard
+   cut — the affordance the hidden scrollbar used to provide. Scroll-driven animations
+   ramp each fade in/out over the first/last 3rem of scroll so a fully-scrolled shelf
+   shows its last card unfaded; browsers without them keep the static right fade. */
+@property --shelf-fade-left {
+	syntax: '<number>';
+	inherits: false;
+	initial-value: 0;
+}
+@property --shelf-fade-right {
+	syntax: '<number>';
+	inherits: false;
+	initial-value: 1;
+}
+.shelf-fade {
+	mask-image: linear-gradient(
+		to right,
+		transparent,
+		black calc(3rem * var(--shelf-fade-left)),
+		black calc(100% - 3rem * var(--shelf-fade-right)),
+		transparent
+	);
+}
+@supports (animation-timeline: scroll()) {
+	.shelf-fade {
+		animation:
+			shelf-fade-left linear both,
+			shelf-fade-right linear both;
+		animation-timeline: scroll(self inline), scroll(self inline);
+		animation-range:
+			0 3rem,
+			calc(100% - 3rem) 100%;
+	}
+}
+@keyframes shelf-fade-left {
+	from {
+		--shelf-fade-left: 0;
+	}
+	to {
+		--shelf-fade-left: 1;
+	}
+}
+@keyframes shelf-fade-right {
+	from {
+		--shelf-fade-right: 1;
+	}
+	to {
+		--shelf-fade-right: 0;
+	}
+}
+
 @keyframes wh-rise {
 	from {
 		opacity: 0;
