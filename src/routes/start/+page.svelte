@@ -206,7 +206,7 @@
 						<h2 class="mb-3 text-sm font-semibold text-ink">{section.label}</h2>
 						<!-- Horizontal shelf: clips + scrolls within the reading column so a long
 						     row never widens the page. -->
-						<div class="-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2">
+						<div class="no-scrollbar -mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2">
 							{#each section.picks as pick (pick.title)}
 								<button
 									type="button"
