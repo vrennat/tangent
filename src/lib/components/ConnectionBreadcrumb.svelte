@@ -36,16 +36,22 @@
 			{#if onNavigate}
 				<!-- `inline` keeps the coarse-pointer 44px min-height (app.css) from
 				     inflating this in-line text button; it reads as a link, not a pill. -->
+				<!-- The source title is set in the display serif at reading size (Ben's
+				     Figma breadcrumb): the eyebrow whispers, the place you came from is
+				     part of the story. -->
 				<button
 					type="button"
 					onclick={onNavigate}
 					title="Jump to {connection.fromTitle}"
-					class="ml-1 inline font-semibold text-ink normal-case underline decoration-transparent
-						underline-offset-2 transition-colors hover:text-accent hover:decoration-accent/60"
+					class="ml-1 inline font-display text-lg font-semibold tracking-tight text-ink
+						normal-case underline decoration-transparent underline-offset-2
+						transition-colors hover:text-accent hover:decoration-accent/60"
 					>{connection.fromTitle}</button
 				>
 			{:else}
-				<span class="ml-1 font-semibold text-ink normal-case">{connection.fromTitle}</span>
+				<span class="ml-1 font-display text-lg font-semibold tracking-tight text-ink normal-case"
+					>{connection.fromTitle}</span
+				>
 			{/if}
 		{/if}
 	</span>

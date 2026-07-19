@@ -318,7 +318,7 @@
 	{/await}
 
 	<div class="mt-12 w-full">
-		<p class="mb-4 text-xs font-medium tracking-widest text-faint uppercase">Or dive into</p>
+		<p class="mb-4 text-xs font-medium tracking-widest text-faint uppercase">Or pick a seed</p>
 
 		<!-- Mood row: filters the seed chips to one subject, so "in the mood for
 		     animals" is an entry point rather than a hunt through the pile.

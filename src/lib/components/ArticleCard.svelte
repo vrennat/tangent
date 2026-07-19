@@ -141,22 +141,11 @@
 	<div class="space-y-3 p-5 sm:p-6">
 		<ConnectionBreadcrumb connection={card.connection} onNavigate={onNavigateToSource} />
 
-		<!-- Title, lead, and summary flow around a small floated thumbnail inset — it's
-		     a garnish, not a hero, and letting the text wrap beside and below it keeps a
-		     short card from stranding the image in whitespace. flow-root contains the
-		     float so the actions row below clears it. -->
-		<div class="flow-root">
-			{#if article.thumbnail && !imageFailed}
-				<!-- Decorative: the title alongside already names it, so alt is empty. -->
-				<img
-					src={article.thumbnail.source}
-					alt=""
-					loading="lazy"
-					onerror={() => (imageFailed = true)}
-					class="float-right mb-2 ml-4 mt-1 size-20 rounded-xl border border-hair object-cover object-top sm:size-24"
-				/>
-			{/if}
-
+		<!-- Text block beside a top-right thumbnail (Ben's Figma card): the image is
+		     a garnish pinned to the corner, not a hero, and the text keeps its own
+		     column instead of wrapping around it. -->
+		<div class="flex items-start gap-4">
+			<div class="min-w-0 flex-1">
 			<h2 class="font-display text-2xl leading-tight font-semibold tracking-tight text-ink">
 				{article.title}
 			</h2>
@@ -180,8 +169,22 @@
 				{/if}
 
 				<!-- Full summary extract: the hook. Wikipedia bounds this to a sentence-complete
-				     few paragraphs, so we show it whole rather than clamping it to a stub. -->
-				<p class="mt-3 font-display text-base leading-relaxed text-muted">{article.extract}</p>
+				     few paragraphs, so we show it whole rather than clamping it to a stub.
+				     Set in the body sans (Ben's Figma): the serif is the reader's voice, the
+				     card is the feed's. -->
+				<p class="mt-3 text-base leading-normal text-muted">{article.extract}</p>
+			{/if}
+			</div>
+
+			{#if article.thumbnail && !imageFailed}
+				<!-- Decorative: the title alongside already names it, so alt is empty. -->
+				<img
+					src={article.thumbnail.source}
+					alt=""
+					loading="lazy"
+					onerror={() => (imageFailed = true)}
+					class="mt-1 size-20 shrink-0 rounded-xl border border-hair object-cover object-top sm:size-24"
+				/>
 			{/if}
 		</div>
 
@@ -207,13 +210,15 @@
 				{liked ? 'Liked' : 'Like'}
 			</button>
 
+			<!-- Filled ink-on-void pill: the card's signature action reads as primary
+			     (Ben's Figma card), matching the nav's New-tangent treatment. -->
 			<button
 				type="button"
 				onclick={branch}
 				disabled={branching}
-				class="inline-flex items-center gap-1.5 rounded-full border border-hair px-3 py-1.5
-					text-sm font-medium text-muted transition-all hover:border-accent/50
-					hover:text-accent active:scale-95 disabled:opacity-50"
+				class="inline-flex items-center gap-1.5 rounded-full border border-hair bg-ink px-3
+					py-1.5 text-sm font-medium text-void transition-all hover:opacity-90
+					active:scale-95 disabled:opacity-50"
 			>
 				{#if branching}
 					<LoaderCircle class="size-4 animate-spin" aria-hidden="true" />
