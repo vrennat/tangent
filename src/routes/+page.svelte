@@ -274,7 +274,7 @@
 		{#each feed.cards as card (card.id)}
 			{@const sourceId = sourceIdByCard.get(card.id)}
 			{#if card.connection.relation === 'surprise'}
-				<TangentDivider department={card.department} />
+				<TangentDivider department={card.department} direction={card.direction} />
 			{/if}
 			<div data-card={card.id} class="scroll-mt-20" class:wh-land={card.id === landedId}>
 				<ArticleCard

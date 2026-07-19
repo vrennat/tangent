@@ -3,6 +3,7 @@ import type { Article, Candidate } from '$lib/wikipedia/types';
 import type { Connection, EngineContext, FeedCard, FetchResult, Relation, TrailNode } from './types';
 import { selectNext } from './select';
 import { department } from './departments';
+import { eraBuckets, placeTokens } from './directions';
 import { categoryTokenSet, tokenize } from './tokens';
 import { profile } from '$lib/engagement/profile.svelte';
 import { saveTrail, loadTrail, clearTrail, chainTip } from './trail';
@@ -400,7 +401,10 @@ class FeedState {
 					{ fromTitle, relation, runStart: selection.runReset },
 					selection.candidate.categories
 				);
-				if (selection.surprised) built.department = department(selection.candidate) ?? undefined;
+				if (selection.surprised) {
+					built.department = department(selection.candidate) ?? undefined;
+					built.direction = selection.direction;
+				}
 				this.#attachFoot(built, selection.foot);
 				this.#buffer.push(built);
 				return true;
@@ -458,7 +462,9 @@ class FeedState {
 	 * relations for trails stored before the flag existed — and accumulates
 	 * tokens (title+description) and category tokens from there to the tip.
 	 */
-	#runState(chain: FeedCard[]): Pick<EngineContext, 'runDepth' | 'runTokens' | 'runCategories'> {
+	#runState(
+		chain: FeedCard[]
+	): Pick<EngineContext, 'runDepth' | 'runTokens' | 'runCategories' | 'runEras' | 'runPlaces'> {
 		let start = 0;
 		for (let i = chain.length - 1; i >= 0; i--) {
 			const { relation, runStart } = chain[i].connection;
@@ -473,13 +479,20 @@ class FeedState {
 
 		const runTokens = new Set<string>();
 		const runCategories = new Set<string>();
+		const runEras = new Set<string>();
+		const runPlaces = new Set<string>();
 		for (const card of chain.slice(start)) {
 			for (const t of tokenize(`${card.article.title} ${card.article.description ?? ''}`)) {
 				runTokens.add(t);
 			}
 			for (const t of categoryTokenSet(card.categories)) runCategories.add(t);
+			// Era/place fuel for directional tangents. Rehydrated cards lack
+			// categories, so like runCategories this degrades, not breaks.
+			const shape = { description: card.article.description, categories: card.categories ?? [] };
+			for (const t of eraBuckets(shape)) runEras.add(t);
+			for (const t of placeTokens(shape)) runPlaces.add(t);
 		}
-		return { runDepth: chain.length - start, runTokens, runCategories };
+		return { runDepth: chain.length - start, runTokens, runCategories, runEras, runPlaces };
 	}
 
 	/** Assemble the engine context from the current chain + engagement profile. */

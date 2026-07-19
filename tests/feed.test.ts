@@ -33,6 +33,8 @@ function context(overrides: Partial<EngineContext> = {}): EngineContext {
 		runDepth: 0,
 		runTokens: new Set(),
 		runCategories: new Set(),
+		runEras: new Set(),
+		runPlaces: new Set(),
 		seenTitles: new Set(),
 		noSurprise: false,
 		stepIndex: 10,
@@ -687,5 +689,100 @@ describe('scoreCandidate — DF discounting', () => {
 			FEED.imageBonus +
 			FEED.positionWeight * Math.exp(-0 / FEED.positionHalfLife);
 		expect(score).toBeCloseTo(expectedScore, 5);
+	});
+});
+
+describe('directional tangents', () => {
+	/** A run deep enough that the break is certain (ramp end = 1). */
+	const BREAK_DEPTH = FEED.runMinLength + FEED.runBreakRamp.length - 1;
+
+	/** Filler with mid-range scores and no hooks — never tangent-eligible. */
+	function neutralPool(n: number): Candidate[] {
+		return Array.from({ length: n }, (_, i) =>
+			candidate({ title: `Neutral ${i}`, description: 'neutral topic', thumbnail: null, position: i })
+		);
+	}
+
+	/** Hooky candidates dated to the 1980s and placed outside the run (era pool fuel). */
+	function eraHooks(n: number): Candidate[] {
+		return Array.from({ length: n }, (_, i) =>
+			candidate({
+				title: `Distant event ${i}`,
+				description: 'unsolved mystery of a 1985 earthquake in Mexico',
+				thumbnail: null,
+				position: 100 + i
+			})
+		);
+	}
+
+	/** The Falklands-run context the era/place fixtures jump from. */
+	function runContext(rng: () => number) {
+		return context({
+			runDepth: BREAK_DEPTH,
+			runEras: new Set(['1980s']),
+			runPlaces: new Set(['argentina', 'united kingdom']),
+			rng
+		});
+	}
+
+	it('labels a same-era different-place jump as an era tangent', () => {
+		// surpriseMinPool gates the break itself; directionMinPool is satisfied within it.
+		const pool = [...neutralPool(FEED.topK), ...eraHooks(FEED.surpriseMinPool)];
+		// Break roll (certain) → direction roll 0.5 (past wildShare, one pool → era) → pick top.
+		const result = selectNext(pool, runContext(seq([0, 0.5, 0])));
+		expect(result?.surprised).toBe(true);
+		expect(result?.direction).toBe('era');
+		expect(result?.candidate.title).toMatch(/^Distant event/);
+	});
+
+	it('labels a same-place different-era jump as a place tangent', () => {
+		const placeHooks = Array.from({ length: FEED.surpriseMinPool }, (_, i) =>
+			candidate({
+				title: `Old event ${i}`,
+				description: 'unsolved mystery of 17th-century Argentina',
+				thumbnail: null,
+				position: 100 + i
+			})
+		);
+		const result = selectNext(
+			[...neutralPool(FEED.topK), ...placeHooks],
+			runContext(seq([0, 0.5, 0]))
+		);
+		expect(result?.surprised).toBe(true);
+		expect(result?.direction).toBe('place');
+	});
+
+	it('keeps the wild-card share: a low direction roll ignores available directions', () => {
+		const pool = [...neutralPool(FEED.topK), ...eraHooks(FEED.surpriseMinPool)];
+		// Direction roll 0.1 < directionWildShare → undirected pool, no label.
+		const result = selectNext(pool, runContext(seq([0, 0.1, 0])));
+		expect(result?.surprised).toBe(true);
+		expect(result?.direction).toBeUndefined();
+	});
+
+	it('degrades to wild tangents when the session carries no run era/place state', () => {
+		// Old clients (or brand-new runs) send nothing: directions never fire.
+		const pool = [...neutralPool(FEED.topK), ...eraHooks(FEED.surpriseMinPool)];
+		const ctx = context({ runDepth: BREAK_DEPTH, rng: seq([0, 0.5, 0]) });
+		const result = selectNext(pool, ctx);
+		expect(result?.surprised).toBe(true);
+		expect(result?.direction).toBeUndefined();
+	});
+
+	it('does not let a thin directional pool block the tangent (falls back to wild)', () => {
+		// One era candidate < directionMinPool, but the gated pool is deep enough:
+		// the break still jumps, unlabeled.
+		const wildHooks = Array.from({ length: FEED.surpriseMinPool }, (_, i) =>
+			candidate({
+				title: `Lost article ${i}`,
+				description: 'unsolved mystery and abandoned experimental project',
+				thumbnail: null,
+				position: 100 + i
+			})
+		);
+		const pool = [...neutralPool(FEED.topK), ...wildHooks, ...eraHooks(1)];
+		const result = selectNext(pool, runContext(seq([0, 0.9, 0])));
+		expect(result?.surprised).toBe(true);
+		expect(result?.direction).toBeUndefined();
 	});
 });

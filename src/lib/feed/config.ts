@@ -163,6 +163,18 @@ export const FEED = {
 	 */
 	surpriseMinPool: 3,
 	/**
+	 * Minimum members for a directional tangent pool (era/place/theme) to be
+	 * pickable. A 1-candidate pool is a forced pick, not a choice — the wild
+	 * pool covers it.
+	 */
+	directionMinPool: 2,
+	/**
+	 * Probability a break deliberately ignores available directions and picks
+	 * from the undirected wild pool anyway — serendipity must survive the
+	 * directional framing, or every tangent becomes an explainable next step.
+	 */
+	directionWildShare: 0.25,
+	/**
 	 * Minimum cards between running feet. The engine offers a foot on most picks
 	 * (~60% of pools have an eligible hooky runner-up); the client shows at most
 	 * one per this many cards so feet read as marginalia, not a second feed.
