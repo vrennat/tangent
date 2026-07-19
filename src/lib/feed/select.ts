@@ -1,6 +1,7 @@
 import type { Candidate } from '$lib/wikipedia/types';
 import type { EngineContext, Selection } from './types';
 import { FEED } from './config';
+import { classifyDirection, type TangentDirection } from './directions';
 import { categoryAffinity, coherence, runVariety, scoreCandidate } from './score';
 import { isPolitical } from './politics';
 import { candidateText, intrigue } from './taste';
@@ -53,16 +54,18 @@ function breakProbability(ctx: EngineContext): number {
 }
 
 /**
- * The tangent pool: candidates with a strong hook, enough base quality after the
- * break-step variety penalty (which sinks the neighborhood the run just covered),
- * and low political risk, ranked by hook-boosted score and capped at surpriseTopK.
+ * The gated tangent pool: candidates with a strong hook, enough base quality
+ * after the break-step variety penalty (which sinks the neighborhood the run
+ * just covered), and low political risk, ranked by hook-boosted score.
  *
- * Eligibility is filtered BEFORE the cap. Filtering after would let hookless
+ * Eligibility is filtered BEFORE any cap. Filtering after would let hookless
  * high scorers (strong relevance/position, zero intrigue) occupy the capped slots
  * and then be discarded — starving out eligible hooky candidates further down and
- * silently killing the tangent the break meant to fire.
+ * silently killing the tangent the break meant to fire. The same logic keeps the
+ * surpriseTopK cap OUT of this function: capping before the direction partition
+ * would starve directional pools whose members rank below the global top-K.
  */
-function tangentRanked(breakScored: Ranked[]): Ranked[] {
+function tangentGated(breakScored: Ranked[]): Ranked[] {
 	return breakScored
 		.filter((s) => s.selectionScore >= FEED.surpriseFloor)
 		.map((s) => ({ s, hook: intrigue(s.candidate) }))
@@ -74,8 +77,45 @@ function tangentRanked(breakScored: Ranked[]): Ranked[] {
 			...s,
 			selectionScore: s.selectionScore + FEED.surpriseIntrigueBoost * hook
 		}))
-		.sort((a, b) => b.selectionScore - a.selectionScore)
-		.slice(0, FEED.surpriseTopK);
+		.sort((a, b) => b.selectionScore - a.selectionScore);
+}
+
+/**
+ * Split the gated tangent pool by direction and choose which pool this break
+ * jumps from (docs/specs/2026-07-19-directional-tangents-design.md): a tangent
+ * that holds one nameable dimension of the run (same era elsewhere, same place
+ * another time, a shared thread) reads as a curated page-turn; the undirected
+ * wild pool — today's behavior — stays in the mix so serendipity survives.
+ *
+ * One rng roll covers both decisions (wild-vs-directed, then which direction),
+ * so the tangent path consumes a constant number of rng calls regardless of
+ * what the partition finds.
+ */
+function chooseTangentPool(
+	gated: Ranked[],
+	ctx: EngineContext
+): { pool: Ranked[]; direction?: TangentDirection } {
+	const wild = gated.slice(0, FEED.surpriseTopK);
+	const byDirection = new Map<TangentDirection, Ranked[]>();
+	for (const s of gated) {
+		const d = classifyDirection(s.candidate, ctx);
+		if (!d) continue;
+		const pool = byDirection.get(d) ?? [];
+		// `gated` arrives sorted, so each pool is its direction's top-K by rank.
+		if (pool.length < FEED.surpriseTopK) pool.push(s);
+		byDirection.set(d, pool);
+	}
+
+	const available: { direction: TangentDirection; pool: Ranked[] }[] = [];
+	for (const direction of ['era', 'place', 'theme'] as const) {
+		const pool = byDirection.get(direction);
+		if (pool && pool.length >= FEED.directionMinPool) available.push({ direction, pool });
+	}
+
+	const roll = ctx.rng();
+	if (available.length === 0 || roll < FEED.directionWildShare) return { pool: wild };
+	const span = (roll - FEED.directionWildShare) / (1 - FEED.directionWildShare);
+	return available[Math.min(Math.floor(span * available.length), available.length - 1)];
 }
 
 /**
@@ -125,10 +165,16 @@ export function selectNext(candidates: Candidate[], ctx: EngineContext): Selecti
 	const roll = ctx.rng();
 	const breaking = !ctx.noSurprise && roll < breakProbability(ctx);
 
-	const withFoot = (candidate: Candidate, surprised: boolean, runReset: boolean): Selection => ({
+	const withFoot = (
+		candidate: Candidate,
+		surprised: boolean,
+		runReset: boolean,
+		direction?: TangentDirection
+	): Selection => ({
 		candidate,
 		surprised,
 		runReset,
+		direction,
 		foot: footCandidate(scored, candidate.title)
 	});
 
@@ -137,9 +183,15 @@ export function selectNext(candidates: Candidate[], ctx: EngineContext): Selecti
 			.map((s) => ({ ...s, selectionScore: s.score + runVariety(s.candidate, ctx) }))
 			.sort((a, b) => b.selectionScore - a.selectionScore);
 
-		const tangentPool = tangentRanked(breakScored);
-		if (tangentPool.length >= FEED.surpriseMinPool) {
-			return withFoot(pickWeighted(tangentPool, ctx.rng, FEED.surpriseTemperature), true, true);
+		const gated = tangentGated(breakScored);
+		if (gated.length >= FEED.surpriseMinPool) {
+			const { pool, direction } = chooseTangentPool(gated, ctx);
+			return withFoot(
+				pickWeighted(pool, ctx.rng, FEED.surpriseTemperature),
+				true,
+				true,
+				direction
+			);
 		}
 
 		// Drift fall-through: no jump worth taking, but still leave the neighborhood

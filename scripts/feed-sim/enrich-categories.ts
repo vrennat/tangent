@@ -12,6 +12,7 @@
  * Run: TANGENT_UA="Tangent-sim/0.1 (tannervass@gmail.com)" bun run enrich-categories.ts
  */
 
+import './sim-ua.ts'; // MUST be first: stamps the sim User-Agent before the client loads
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fetchCategoriesFor } from '../../src/lib/wikipedia/action.ts';
 import type { Candidate } from '../../src/lib/wikipedia/types.ts';

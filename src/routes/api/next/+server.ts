@@ -5,6 +5,7 @@ import { fetchExploreCandidates, fetchRelated } from '$lib/wikipedia/action';
 import { selectNext } from '$lib/feed/select';
 import { buildEngineContext } from '$lib/feed/context';
 import { department } from '$lib/feed/departments';
+import { eraBuckets, placeTokens } from '$lib/feed/directions';
 import { categoryTokenSet } from '$lib/feed/tokens';
 import { resolveCard } from '$lib/server/resolveCard';
 import { cached, TTL } from '$lib/server/cache';
@@ -79,7 +80,12 @@ export const POST: RequestHandler = async ({ request, setHeaders }) => {
 				relation,
 				runReset: selection.runReset,
 				categoryTokens: [...categoryTokenSet(selection.candidate.categories)],
+				// Era/place run-accumulation fuel, pre-computed like categoryTokens so
+				// native clients never need their own extractor.
+				eraTokens: [...eraBuckets(selection.candidate)],
+				placeTokens: [...placeTokens(selection.candidate)],
 				department: (selection.surprised && department(selection.candidate)) || undefined,
+				direction: selection.direction,
 				foot: selection.foot
 					? { title: selection.foot.title, description: selection.foot.description }
 					: undefined

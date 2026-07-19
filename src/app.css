@@ -608,40 +608,42 @@ body::before {
 }
 /* {{multiple image}} montages (div.thumb.tmulti) tile several photos into rows of
    fixed-size crop cells via MediaWiki TemplateStyles we strip — without them the rows
-   linearize into a ragged vertical stack and Tailwind's `height:auto` defeats each
-   cell's fixed-height crop box (so images spill out full-size). Restore the row/cell
-   flex layout, honoring the template's inline per-cell widths + crop heights, so the
-   montage tiles as authored; the generic .thumbinner rule above centers + caps it. */
+   linearize into a ragged vertical stack. Restore the row/cell flex layout, honoring
+   the template's inline per-cell widths + crop heights, so the montage tiles AS
+   AUTHORED everywhere, including inside Quick Facts: montage captions enumerate the
+   tiles spatially ("clockwise from top left") and only the authored grid keeps them
+   truthful. Current markup's cells are .tsingle; .thumbimage is the older form. */
+.wiki-content .tmulti .multiimageinner {
+	/* The inline pixel width would overflow narrow columns (a 292px montage in a
+	   320px phone's drawer); cap it and let the row's cells shrink instead. */
+	max-width: 100% !important;
+}
 .wiki-content .tmulti .trow {
 	display: flex;
-	flex-wrap: wrap;
+	/* nowrap: a wrapped tile would break the row/column geometry the caption
+	   references — on narrow columns the tiles shrink proportionally instead. */
+	flex-wrap: nowrap;
 	justify-content: center;
 	gap: 3px;
 }
+.wiki-content .tmulti .tsingle,
 .wiki-content .tmulti .thumbimage {
 	max-width: 100%;
+	/* Shrinkable below the inline width: the image's natural width is otherwise a
+	   min-content floor, so the row would overflow rather than shrink. */
+	min-width: 0;
 }
+.wiki-content .tmulti .tsingle img,
 .wiki-content .tmulti .thumbimage img {
-	width: 100%;
-	height: 100%;
-	object-fit: cover;
 	margin: 0;
 	border: 0;
 	border-radius: 2px;
 	box-shadow: none;
 }
-/* Inside Quick Facts the panel is ~24rem wide — paired tiles shrink to ~11rem each and
-   produce an inconsistent mix of full-width singles and narrow side-by-side pairs.
-   Stack all montage rows to full width for a uniform column of images. */
-.wiki-content .quick-facts .tmulti .trow {
-	display: block;
-}
-.wiki-content .quick-facts .tmulti .thumbimage {
-	width: 100% !important;
-	height: auto !important;
-}
-.wiki-content .quick-facts .tmulti .thumbimage img {
-	height: auto;
+.wiki-content .tmulti .thumbimage img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
 }
 /* The montage caption enumerates the tiles (one line each) — it reads as a centered
    caption, not a bulleted list. The default disc markers + indent leave bullets
@@ -706,29 +708,30 @@ body::before {
  * table reads as a full-width dark-theme table once opened.
  */
 .wiki-content .quick-facts {
-	/* A label/value fact table reads as an infobox, not a full-bleed data grid —
-	   cap it to a compact card (Wikipedia's infoboxes sit near 22em) and center it,
-	   so on the wide desktop pane the values don't float in a sea of dead space
-	   beside their labels. On a narrow column (<24rem) max-width yields to the
-	   column, so it stays full-width on mobile. */
-	max-width: 24rem;
-	margin: 1.4em auto;
+	/* Full-width row in the reading column (Ben's Figma reader): the reader pane
+	   is already a bounded column, so the old 24rem centering cap just made the
+	   drawer look like a stray card. Collapsed it reads as a raised row
+	   (surface-2); opened it settles back to the card surface. */
+	margin: 1.4em 0;
 	border: 1px solid var(--color-hair);
 	border-radius: var(--radius-card);
 	background: var(--color-surface);
 	overflow: hidden;
+}
+.wiki-content .quick-facts:not([open]) {
+	background: var(--color-surface-2);
 }
 .wiki-content .quick-facts > summary {
 	cursor: pointer;
 	list-style: none;
 	display: flex;
 	align-items: center;
-	gap: 0.5rem;
-	padding: 0.7rem 0.9rem;
+	gap: 0.75rem;
+	padding: 1rem 1.25rem;
 	font-family: var(--font-body);
-	font-size: 0.75rem;
+	font-size: 0.6875rem;
 	font-weight: 600;
-	letter-spacing: 0.06em;
+	letter-spacing: 0.14em;
 	text-transform: uppercase;
 	color: var(--color-muted);
 	transition: color 0.12s ease;

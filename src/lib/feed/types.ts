@@ -1,4 +1,5 @@
 import type { Article, Candidate } from '$lib/wikipedia/types';
+import type { TangentDirection } from './directions';
 import type { TasteId } from './taste';
 
 /** How a card arrived in the feed — drives the breadcrumb phrasing. */
@@ -24,6 +25,9 @@ export interface FeedCard {
 	/** Recurring-column label for a tangent card ("Deep Time", "Strange Deaths" …);
 	 *  absent on non-tangents and on tangents that match no department. */
 	department?: string;
+	/** How this tangent relates to the run it broke from (era/place/theme);
+	 *  absent on non-tangents and on wild-card tangents. Drives divider copy. */
+	direction?: TangentDirection;
 	/** A running foot to render after this card: a one-line fact from the pick's
 	 *  runner-up, tappable as a dive. Attached by cadence — most cards have none. */
 	foot?: { title: string; description: string | null };
@@ -90,6 +94,12 @@ export interface EngineContext {
 	/** Normalized category tokens accumulated from the current run's cards — the
 	 *  era/region half of the coherence signal. */
 	runCategories: Set<string>;
+	/** Era buckets accumulated from the current run's cards (directions.ts) —
+	 *  the "same time" half of directional tangent classification. */
+	runEras: Set<string>;
+	/** Place tokens accumulated from the current run's cards (directions.ts) —
+	 *  the "same place" half of directional tangent classification. */
+	runPlaces: Set<string>;
 	/** Titles already shown, to avoid loops. */
 	seenTitles: Set<string>;
 	/** When true, the engine never breaks the run for a tangent (branchFrom, dives). */
@@ -104,6 +114,9 @@ export interface Selection {
 	candidate: Candidate;
 	/** True when this pick is a tangent — a deliberate run-breaking jump. */
 	surprised: boolean;
+	/** The dimension this tangent holds relative to the run it broke from;
+	 *  absent on non-tangents and wild-card tangents. */
+	direction?: TangentDirection;
 	/** True when this pick starts a new run (every tangent, plus the drift
 	 *  fall-through when the tangent pool was too shallow). Clients reset their
 	 *  run accounting (depth, run tokens/categories) on it. */
@@ -148,6 +161,11 @@ export interface SessionPayload {
 	runTokens?: string[];
 	/** Normalized category tokens accumulated from the current run's cards. */
 	runCategories?: string[];
+	/** Era buckets accumulated from the current run's cards. Older clients omit
+	 *  them; directional tangents simply never fire (wild-card behavior). */
+	runEras?: string[];
+	/** Place tokens accumulated from the current run's cards. */
+	runPlaces?: string[];
 }
 
 /** POST body for `/api/next` — the server reconstructs an {@link EngineContext} from this. */
@@ -174,6 +192,13 @@ export interface NextResponse {
 	/** Recurring-column label, present only on tangent picks that match one —
 	 *  computed server-side so native clients stay classifier-free. */
 	department?: string;
+	/** The tangent's direction relative to the broken run, when one was held. */
+	direction?: TangentDirection;
+	/** The picked candidate's era buckets / place tokens (directions.ts), ready
+	 *  for the client's run accumulation — pre-computed server-side so native
+	 *  clients never need their own extractor. Same pattern as categoryTokens. */
+	eraTokens?: string[];
+	placeTokens?: string[];
 	/** The pick's runner-up as a running-foot offer (trimmed to what the line
 	 *  renders + what a tap-to-dive needs). Clients own cadence and dedupe. */
 	foot?: { title: string; description: string | null };

@@ -19,11 +19,13 @@
  *     cluster landing)
  */
 
+import './sim-ua.ts'; // MUST be first: stamps the sim User-Agent before the client loads
 import { fetchExploreCandidates } from '../../src/lib/wikipedia/action.ts';
 import { selectNext } from '../../src/lib/feed/select.ts';
 import { buildEngineContext } from '../../src/lib/feed/context.ts';
 import { specificity, dfWeight } from '../../src/lib/feed/score.ts';
 import { categoryTokenSet, tokenize } from '../../src/lib/feed/tokens.ts';
+import { eraBuckets, placeTokens, type TangentDirection } from '../../src/lib/feed/directions.ts';
 import { tasteAffinity, intrigue, type TasteId } from '../../src/lib/feed/taste.ts';
 import { isPolitical } from '../../src/lib/feed/politics.ts';
 import { FEED } from '../../src/lib/feed/config.ts';
@@ -274,6 +276,8 @@ interface JourneyResult {
 		description: string | null;
 		categories: string[];
 		surprised: boolean;
+		/** Directional-tangent label, when the pick held a dimension of the run. */
+		direction: TangentDirection | null;
 		/** This pick started a new run (tangent or drift fall-through). */
 		runReset: boolean;
 		/** The reader fast-skipped this tangent; the chain healed back past it. */
@@ -354,8 +358,16 @@ async function runJourney(
 	// Run accounting (mirrors feedState.#runState / FeedStore.sessionPayload):
 	// the current run's cards, boundary inclusive, feeding coherence in-run and
 	// variety at a break. Tangents re-root; a fast-skipped tangent heals back.
-	type RunCard = { title: string; description: string | null; catTokens: Set<string> };
-	let run: RunCard[] = [{ title: seed, description: seedDesc, catTokens: new Set() }];
+	type RunCard = {
+		title: string;
+		description: string | null;
+		catTokens: Set<string>;
+		eras: Set<string>;
+		places: Set<string>;
+	};
+	let run: RunCard[] = [
+		{ title: seed, description: seedDesc, catTokens: new Set(), eras: new Set(), places: new Set() }
+	];
 	let preTangent: { run: RunCard[]; tip: string } | null = null;
 
 	for (let step = 1; step <= maxLen; step++) {
@@ -368,9 +380,13 @@ async function runJourney(
 
 		const runTokens = new Set<string>();
 		const runCategories = new Set<string>();
+		const runEras = new Set<string>();
+		const runPlaces = new Set<string>();
 		for (const card of run) {
 			for (const t of tokenize(`${card.title} ${card.description ?? ''}`)) runTokens.add(t);
 			for (const t of card.catTokens) runCategories.add(t);
+			for (const t of card.eras) runEras.add(t);
+			for (const t of card.places) runPlaces.add(t);
 		}
 
 		const interest = {
@@ -385,7 +401,9 @@ async function runJourney(
 			noSurprise: false,
 			runDepth: run.length,
 			runTokens: [...runTokens],
-			runCategories: [...runCategories]
+			runCategories: [...runCategories],
+			runEras: [...runEras],
+			runPlaces: [...runPlaces]
 		};
 		const ctx = buildEngineContext(interest, session, engineRng);
 		const sel = selectNext(candidates, ctx);
@@ -418,7 +436,9 @@ async function runJourney(
 		const runCard: RunCard = {
 			title: c.title,
 			description: c.description,
-			catTokens: categoryTokenSet(c.categories)
+			catTokens: categoryTokenSet(c.categories),
+			eras: eraBuckets(c),
+			places: placeTokens(c)
 		};
 		if (sel.runReset) {
 			preTangent = sel.surprised ? { run, tip } : null; // only tangents can heal
@@ -447,6 +467,7 @@ async function runJourney(
 			description: c.description,
 			categories: c.categories ?? [],
 			surprised: sel.surprised,
+			direction: sel.direction ?? null,
 			runReset: sel.runReset,
 			healed,
 			onInterest,

@@ -205,6 +205,8 @@ const NEUTRAL_CONTEXT: EngineContext = {
 	runDepth: 0,
 	runTokens: new Set(),
 	runCategories: new Set(),
+	runEras: new Set(),
+	runPlaces: new Set(),
 	seenTitles: new Set(),
 	noSurprise: true,
 	stepIndex: 0,

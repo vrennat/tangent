@@ -34,6 +34,9 @@ export function buildEngineContext(
 		runDepth: session.runDepth ?? stepIndex % runCycle,
 		runTokens: new Set(session.runTokens ?? session.recentTokens ?? []),
 		runCategories: new Set(session.runCategories ?? []),
+		// Absent on older clients: directions simply never fire (wild-card behavior).
+		runEras: new Set(session.runEras ?? []),
+		runPlaces: new Set(session.runPlaces ?? []),
 		seenTitles,
 		noSurprise: session.noSurprise ?? false,
 		stepIndex,

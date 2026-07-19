@@ -102,14 +102,16 @@
 						onclick={() => trailPanel.toggle()}
 						aria-label="Your trail, {seenCount} articles"
 						aria-haspopup="dialog"
-						class="icon-btn relative inline-flex items-center justify-center rounded-full p-1.5
+						class="icon-btn inline-flex items-center gap-1 rounded-full p-1.5
 							text-muted transition-colors hover:bg-surface-2 hover:text-ink"
 					>
-						<!-- Trail: a winding route between waypoints — the path you've walked. -->
+						<!-- Trail: a winding route between waypoints — the path you've walked.
+						     Count sits beside the glyph as its own pill (Ben's Figma nav),
+						     not overlaid on it. -->
 						<Route class="size-5" aria-hidden="true" />
 						<span
-							class="absolute -right-0.5 -top-0.5 grid h-4 min-w-[1rem] place-items-center
-								rounded-full bg-surface-2 px-1 text-[10px] font-semibold text-muted ring-1 ring-hair"
+							class="rounded-full border border-hair bg-surface px-1.5 py-0.5 text-[11px]
+								font-semibold leading-none text-muted"
 							aria-hidden="true">{seenCount}</span
 						>
 					</button>
@@ -136,12 +138,15 @@
 				<!-- Below ~320px the wordmark + this pill overflow the bar, which widens the
 				     document and makes the feed column look detached from the viewport. Collapse
 				     the label to an icon-only button there; sr-only keeps the accessible name. -->
+				<!-- Filled ink-on-void pill: the page's one primary CTA (Ben's Figma nav).
+				     Ink/void inversion keeps it high-contrast in every theme. -->
 				<a
 					href="/start"
 					data-cta
 					aria-label="New tangent"
-					class="inline-flex items-center gap-1.5 rounded-full border border-hair px-3 py-1.5
-						text-sm font-medium text-muted transition-colors hover:border-accent/50 hover:text-accent"
+					class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border
+						border-hair bg-ink px-3 py-1.5 text-sm font-medium text-void transition-all
+						hover:opacity-90 active:scale-95"
 				>
 					<Plus class="size-4" aria-hidden="true" />
 					<span class="hidden min-[20rem]:inline">New tangent</span>
@@ -191,7 +196,7 @@
 					class="-mx-1.5 -my-3.5 px-1.5 py-3.5 transition-colors hover:text-muted">Terms</a
 				>
 				<a
-					href="https://github.com/vrennat/tangent"
+					href="https://github.com/707-Labs/tangent"
 					target="_blank"
 					rel="noopener noreferrer"
 					class="-mx-1.5 -my-3.5 px-1.5 py-3.5 transition-colors hover:text-muted">Source</a
