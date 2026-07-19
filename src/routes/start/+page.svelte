@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import type { SearchResult } from '$lib/wikipedia/types';
 	import type { PageProps } from './$types';
-	import { randomSeed } from '$lib/seeds';
+	import { randomSeed, SEEDS, SEED_CATEGORIES, type SeedCategory } from '$lib/seeds';
 	import BrandMark from '$lib/components/BrandMark.svelte';
 	import RelationIcon from '$lib/components/RelationIcon.svelte';
 	import { Search } from '@lucide/svelte';
@@ -15,6 +15,11 @@
 	let results = $state<SearchResult[]>([]);
 	let loading = $state(false);
 	let highlighted = $state(-1);
+
+	// Mood filter for the seed chips: null shows the server's random sample; a
+	// category shows ALL of that category's seeds (small enough to list whole).
+	let mood = $state<SeedCategory | null>(null);
+	const moodSeeds = $derived(mood === null ? data.seeds : SEEDS.filter((s) => s.category === mood));
 
 	// The listbox popup is shown (and the combobox is "expanded") whenever there's
 	// a usable query — including the loading and no-match states, not just hits.
@@ -194,11 +199,17 @@
 
 			<div class="mt-6 flex flex-col gap-8">
 				{#each ['first', 'second'] as row (row)}
+					<!-- First row mirrors the wider/taller "Did you know" cards so the
+					     stream-in doesn't shift the layout. -->
 					<div>
 						<div class="mb-3 h-4 w-28 animate-pulse rounded bg-surface-2"></div>
 						<div class="no-scrollbar shelf-fade -mx-1 flex gap-3 overflow-x-hidden px-1 pb-2">
 							{#each { length: 6 }, i (i)}
-								<div class="h-48 w-44 shrink-0 animate-pulse rounded-2xl bg-surface-2"></div>
+								<div
+									class="{row === 'first'
+										? 'h-64 w-56'
+										: 'h-48 w-44'} shrink-0 animate-pulse rounded-2xl bg-surface-2"
+								></div>
 							{/each}
 						</div>
 					</div>
@@ -249,13 +260,17 @@
 							{:else}
 								<!-- Horizontal shelf: clips + scrolls within the reading column so a long
 								     row never widens the page. -->
+								<!-- On DYK cards the hook IS the content — the title just names the
+								     subject — so they get a wider card and a deep clamp instead of the
+								     2-line teaser the other shelves use. -->
+								{@const isDyk = section.id === 'dyk'}
 								<div class="no-scrollbar shelf-fade -mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-2">
 									{#each section.picks as pick (pick.title)}
 										<a
 											href={seedHref(pick.title)}
-											class="flex w-44 shrink-0 snap-start flex-col overflow-hidden rounded-2xl
-												border border-hair bg-surface/60 text-left transition-all
-												hover:border-accent/50 active:scale-[0.98]"
+											class="flex {isDyk ? 'w-56' : 'w-44'} shrink-0 snap-start flex-col
+												overflow-hidden rounded-2xl border border-hair bg-surface/60 text-left
+												transition-all hover:border-accent/50 active:scale-[0.98]"
 										>
 											{#if pick.thumbnail}
 												<img
@@ -280,8 +295,10 @@
 												{/if}
 												<span class="line-clamp-2 text-sm font-medium text-ink">{pick.title}</span>
 												{#if pick.hook}
-													<span class="line-clamp-2 text-xs leading-snug text-faint"
-														>{pick.hook}</span
+													<span
+														class="{isDyk
+															? 'line-clamp-6'
+															: 'line-clamp-2'} text-xs leading-snug text-faint">{pick.hook}</span
 													>
 												{:else if pick.description}
 													<span class="line-clamp-2 text-xs leading-snug text-faint"
@@ -302,8 +319,41 @@
 
 	<div class="mt-12 w-full">
 		<p class="mb-4 text-xs font-medium tracking-widest text-faint uppercase">Or dive into</p>
+
+		<!-- Mood row: filters the seed chips to one subject, so "in the mood for
+		     animals" is an entry point rather than a hunt through the pile.
+		     Tapping the active mood clears it back to the mixed sample. -->
+		<div class="mb-4 flex flex-wrap justify-center gap-2">
+			{#each SEED_CATEGORIES as cat (cat.id)}
+				<button
+					type="button"
+					aria-pressed={mood === cat.id}
+					onclick={() => (mood = mood === cat.id ? null : cat.id)}
+					class="rounded-full border px-3.5 py-1.5 text-sm font-medium transition-all
+						active:scale-95 {mood === cat.id
+						? 'border-accent/60 bg-accent/10 text-accent'
+						: 'border-hair bg-surface/60 text-muted hover:border-accent/50 hover:text-ink'}"
+				>
+					{cat.label}
+				</button>
+			{/each}
+		</div>
+
 		<div class="flex flex-wrap justify-center gap-2">
-			{#each data.seeds as seed (seed.title)}
+			{#if mood !== null}
+				{@const active = mood}
+				<button
+					type="button"
+					onclick={() => enter(randomSeed(active).title)}
+					class="inline-flex items-center gap-1.5 rounded-full border border-spark/30 bg-spark/5
+						px-3 py-1.5 text-sm font-medium text-spark transition-all hover:bg-spark/10
+						active:scale-95"
+				>
+					<RelationIcon relation="surprise" class="size-3.5" />
+					Surprise me
+				</button>
+			{/if}
+			{#each moodSeeds as seed (seed.title)}
 				<a
 					href={seedHref(seed.title)}
 					class="rounded-full border border-hair bg-surface/60 px-3 py-1.5 text-sm
