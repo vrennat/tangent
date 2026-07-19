@@ -196,7 +196,7 @@
 					class="-mx-1.5 -my-3.5 px-1.5 py-3.5 transition-colors hover:text-muted">Terms</a
 				>
 				<a
-					href="https://github.com/vrennat/tangent"
+					href="https://github.com/707-Labs/tangent"
 					target="_blank"
 					rel="noopener noreferrer"
 					class="-mx-1.5 -my-3.5 px-1.5 py-3.5 transition-colors hover:text-muted">Source</a

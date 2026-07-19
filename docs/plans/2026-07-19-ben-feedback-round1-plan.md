@@ -171,7 +171,8 @@ Approach:
 
 ## For Tanner (not code)
 
-- Invite Ben to github.com/vrennat/tangent (he flagged no repo access).
+- ~~Invite Ben to the repo~~ — done 2026-07-19: repo transferred to
+  github.com/707-Labs/tangent, bengreen0894 has write.
 - Confirm with Ben: (a) five categories or five+science, (b) /start keeps
   search + Today shelves under his visual language, (c) direction copy tone for
   tangent dividers.
