@@ -94,7 +94,7 @@
 		<p class="leading-relaxed text-muted">
 			Tangent is open source under the MIT license. Read the code, file an issue, or fork it on
 			<a
-				href="https://github.com/vrennat/tangent"
+				href="https://github.com/707-Labs/tangent"
 				target="_blank"
 				rel="noopener noreferrer"
 				class={linkClass}>GitHub</a
