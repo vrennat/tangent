@@ -19,6 +19,7 @@
  *     cluster landing)
  */
 
+import './sim-ua.ts'; // MUST be first: stamps the sim User-Agent before the client loads
 import { fetchExploreCandidates } from '../../src/lib/wikipedia/action.ts';
 import { selectNext } from '../../src/lib/feed/select.ts';
 import { buildEngineContext } from '../../src/lib/feed/context.ts';
