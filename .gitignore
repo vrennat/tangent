@@ -16,3 +16,6 @@ vite.config.ts.timestamp-*
 # design-ctx scan snapshot (local diffing only)
 .design-ctx.snapshot.json
 .playwright-mcp/
+
+# Claude Code worktree checkouts (never commit these)
+.claude/worktrees/
